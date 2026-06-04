@@ -57,6 +57,15 @@ export type ParsedScheduleFile = {
   layout: XlsxScheduleLayout;
 };
 
+const dayOffsets = new Map([
+  ["MONDAY", 0],
+  ["TUESDAY", 1],
+  ["WEDNESDAY", 2],
+  ["THURSDAY", 3],
+  ["FRIDAY", 4],
+  ["SATURDAY", 5],
+  ["SUNDAY", 6]
+]);
 const PURPLE = { r: 180, g: 167, b: 214 };
 const dayMap = new Map([
   ["SEGUNDA", "MONDAY"],
@@ -112,6 +121,14 @@ function colorHex(color?: Partial<ExcelJS.Color>) {
 
 function formatDate(value: Date) {
   return new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "numeric", timeZone: "UTC" }).format(value);
+}
+
+function formatWeekDate(weekStart: Date, dayOfWeek: string | null | undefined) {
+  const offset = dayOffsets.get(dayOfWeek ?? "");
+  if (offset === undefined) return null;
+  const date = new Date(weekStart);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(date);
 }
 
 function textFromValue(value: ExcelJS.CellValue): string {
@@ -379,4 +396,26 @@ export async function parseScheduleFile(fileName: string, buffer: Buffer): Promi
     throw new Error("Para manter a formatação fiel, envie XLSX.");
   }
   return parseXlsxSchedule(buffer);
+}
+
+export function alignParsedScheduleToWeek(parsed: ParsedScheduleFile, weekStart: Date): ParsedScheduleFile {
+  const dayByColumn = new Map<number, string>();
+  for (const cell of parsed.layout.cells) {
+    if (cell.rowIndex !== 2) continue;
+    const dayOfWeek = dayMap.get(normalize(cell.text));
+    if (dayOfWeek) dayByColumn.set(cell.colIndex, dayOfWeek);
+  }
+
+  for (const cell of parsed.layout.cells) {
+    if (cell.rowIndex !== 1) continue;
+    const dateLabel = formatWeekDate(weekStart, dayByColumn.get(cell.colIndex));
+    if (dateLabel) cell.text = dateLabel;
+  }
+
+  for (const cell of parsed.cells) {
+    const dateLabel = formatWeekDate(weekStart, cell.dayOfWeek);
+    if (dateLabel) cell.dateLabel = dateLabel;
+  }
+
+  return parsed;
 }

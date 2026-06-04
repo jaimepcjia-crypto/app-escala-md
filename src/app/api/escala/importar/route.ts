@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth";
 import { normalizeWeekStart } from "@/lib/constants";
-import { parseScheduleFile } from "@/lib/importer";
+import { alignParsedScheduleToWeek, parseScheduleFile } from "@/lib/importer";
 import { ensureSeedData } from "@/lib/seed";
 
 export async function POST(request: NextRequest) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parseScheduleFile(file.name, buffer);
+    const parsed = alignParsedScheduleToWeek(await parseScheduleFile(file.name, buffer), weekStart);
 
     const scheduleImport = await prisma.scheduleImport.create({
       data: {
