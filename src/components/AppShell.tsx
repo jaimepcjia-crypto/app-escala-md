@@ -17,7 +17,7 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
 
   const managerLinks = [
     { href: "/admin", label: "Gerente", key: "admin", icon: Shield, help: "Abre o painel administrativo do Ferreira." },
-    { href: "/admin/arquivo", label: "Arquivo", key: "arquivo", icon: Archive, help: "Abre importacoes e escalas publicadas anteriores do gerente." },
+    { href: "/admin/arquivo", label: "DADOS", key: "arquivo", icon: Archive, help: "Abre importacoes e escalas publicadas anteriores do gerente." },
     { href: "/disponibilidade", label: "Nao pode", key: "disponibilidade", icon: ClipboardList, help: "Abre a visualizacao mensal de indisponibilidades dos corretores." },
     { href: "/escala", label: "RANKING VENDAS", key: "escala", icon: Eye, help: "Mostra a escala publicada e o ranking de vendas da semana." }
   ] as const;
