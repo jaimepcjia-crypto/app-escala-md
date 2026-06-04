@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  isFerreira  Boolean  @default(false)
+  brokers     Broker[]
+}
+
+model Broker {
+  id                String               @id @default(cuid())
+  name              String               @unique
+  canExternalDuty   Boolean              @default(true)
+  active            Boolean              @default(true)
+  teamId            String
+  team              Team                 @relation(fields: [teamId], references: [id])
+  unavailabilities  Unavailability[]
+  assignments       ScheduleAssignment[]
+  historyTotal      HistoryTotal?
+  user              User?
+  confirmations     UnavailabilityConfirmation[]
+  monthlySales      BrokerMonthlySale[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String
+  brokerId     String?  @unique
+  broker       Broker?  @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model DutyType {
+  id                String               @id @default(cuid())
+  name              String               @unique
+  priority          Int
+  requiresExternal  Boolean              @default(false)
+  isHeadquarters    Boolean              @default(false)
+  headquartersSlot  Int?
+  isCalling         Boolean              @default(false)
+  windows           WeeklyWindow[]
+  assignments       ScheduleAssignment[]
+}
+
+model BrokerMonthlySale {
+  id          String   @id @default(cuid())
+  monthStart  DateTime
+  amountCents BigInt   @default(100)
+  brokerId    String
+  broker      Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([monthStart, brokerId])
+}
+
+model DutyPriority {
+  id        String   @id @default(cuid())
+  localName String   @unique
+  position  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WeeklyWindow {
+  id          String    @id @default(cuid())
+  weekStart   DateTime
+  dayOfWeek   String
+  shift       String
+  startHour   Int?
+  quantity    Int       @default(0)
+  dutyTypeId  String
+  dutyType    DutyType  @relation(fields: [dutyTypeId], references: [id])
+  importCellId String?
+  importedCell ImportedScheduleCell? @relation(fields: [importCellId], references: [id])
+  sourceText   String?
+  sourceColorHex String?
+  confidence   Float     @default(1)
+
+  @@index([weekStart, dayOfWeek, shift, dutyTypeId])
+}
+
+model Unavailability {
+  id          String    @id @default(cuid())
+  date        DateTime
+  weekStart   DateTime?
+  dayOfWeek   String?
+  shift       String
+  startHour   Int?
+  endHour     Int?
+  reason      String?
+  brokerId    String
+  broker      Broker    @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+
+  @@unique([date, shift, brokerId])
+  @@index([date])
+  @@index([weekStart])
+}
+
+model Schedule {
+  id          String               @id @default(cuid())
+  weekStart   DateTime
+  status      String               @default("DRAFT")
+  importId    String?
+  import      ScheduleImport?      @relation(fields: [importId], references: [id])
+  createdAt   DateTime             @default(now())
+  publishedAt DateTime?
+  assignments ScheduleAssignment[]
+  aiReview    AiScheduleReview?
+}
+
+model AiScheduleReview {
+  id              String   @id @default(cuid())
+  scheduleId      String   @unique
+  schedule        Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  model           String?
+  status          String   @default("DISABLED")
+  summary         String
+  meritocracy     String?
+  balance         String?
+  conflicts       String?
+  recommendations String   @default("[]")
+  rawJson         String?
+  error           String?
+  createdAt       DateTime @default(now())
+}
+
+model ScheduleAssignment {
+  id              String    @id @default(cuid())
+  scheduleId      String
+  schedule        Schedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  brokerId        String?
+  broker          Broker?   @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  dutyTypeId      String
+  dutyType        DutyType  @relation(fields: [dutyTypeId], references: [id])
+  dayOfWeek       String
+  shift           String
+  startHour       Int?
+  slot            Int       @default(1)
+  assignmentType  String    @default("FERREIRA_AI")
+  importedCellId  String?
+  importedCell    ImportedScheduleCell? @relation(fields: [importedCellId], references: [id])
+  sourceText      String?
+  sourceColorHex  String?
+  isViolation     Boolean   @default(false)
+  violationReason String?
+  balanceAlert    String?
+  manualAlerts    ManualAdjustmentAlert[]
+  createdAt       DateTime  @default(now())
+}
+
+model HistoryTotal {
+  id                      String  @id @default(cuid())
+  brokerId                String  @unique
+  broker                  Broker  @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  totalAssignments         Int     @default(0)
+  externalAssignments      Int     @default(0)
+  headquartersPositionOne  Int     @default(0)
+  headquartersPositionTwo  Int     @default(0)
+  callingAssignments       Int     @default(0)
+}
+
+model ScheduleImport {
+  id          String   @id @default(cuid())
+  weekStart   DateTime
+  fileName    String
+  fileType    String
+  status      String   @default("PENDING_REVIEW")
+  createdAt   DateTime @default(now())
+  confirmedAt DateTime?
+  cells       ImportedScheduleCell[]
+  schedules   Schedule[]
+}
+
+model ImportedScheduleCell {
+  id          String   @id @default(cuid())
+  importId    String
+  import      ScheduleImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  rowIndex    Int
+  colIndex    Int
+  rowLabel    String?
+  colLabel    String?
+  localName   String?
+  timeLabel   String?
+  dayOfWeek   String?
+  shift       String?
+  startHour   Int?
+  dateLabel   String?
+  text        String?
+  colorHex    String?
+  ownerType   String
+  confidence  Float    @default(1)
+  windows     WeeklyWindow[]
+  assignments ScheduleAssignment[]
+
+  @@index([importId])
+  @@index([ownerType])
+}
+
+model UnavailabilityConfirmation {
+  id          String   @id @default(cuid())
+  weekStart   DateTime
+  brokerId    String
+  broker      Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  confirmedAt DateTime @default(now())
+
+  @@unique([weekStart, brokerId])
+}
+
+model ManualAdjustmentAlert {
+  id           String   @id @default(cuid())
+  assignmentId String
+  assignment   ScheduleAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  severity     String   @default("WARN")
+  reason       String
+  createdAt    DateTime @default(now())
+}

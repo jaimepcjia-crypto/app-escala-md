@@ -1,0 +1,13 @@
+.codex/
+.next/
+.next-local/
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+prisma/dev.db
+prisma/dev.db-journal
+prisma/*.backup.db
+playwright-*.png
