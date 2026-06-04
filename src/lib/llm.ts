@@ -130,6 +130,27 @@ export function buildBrokerStats(assignments: ReviewAssignment[]) {
   return [...rows.values()].sort((left, right) => right.total - left.total || left.name.localeCompare(right.name));
 }
 
+export function buildBrokerStatsWithRanks(assignments: ReviewAssignment[], rankByBrokerId: Map<string, number>) {
+  const rows = new Map<string, { name: string; salesRank: number | null; total: number; external: number; headquarters: number; calling: number }>();
+  for (const assignment of assignments) {
+    if (!assignment.brokerId || !assignment.broker || assignment.assignmentType === "EXTERNAL_IMPORTED") continue;
+    const current = rows.get(assignment.brokerId) ?? {
+      name: assignment.broker.name,
+      salesRank: rankByBrokerId.get(assignment.brokerId) ?? null,
+      total: 0,
+      external: 0,
+      headquarters: 0,
+      calling: 0
+    };
+    current.total += 1;
+    if (assignment.dutyType.requiresExternal) current.external += 1;
+    if (assignment.dutyType.isHeadquarters) current.headquarters += 1;
+    if (assignment.dutyType.isCalling) current.calling += 1;
+    rows.set(assignment.brokerId, current);
+  }
+  return [...rows.values()].sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999) || right.total - left.total || left.name.localeCompare(right.name));
+}
+
 export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmReviewResult> {
   const { apiKey, model } = getLlmConfig();
   if (!apiKey) {
@@ -153,7 +174,9 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       "A escala ja foi gerada pelo motor deterministico; a LLM deve auditar e sugerir melhorias, nao inventar regras.",
       "Cores/janelas roxas sao do gerente Ferreira; demais plantões importados sao externos e preservados.",
       "Meritocracia usa ranking de vendas e reservas nos tres melhores plantoes.",
-      "O gerente pode editar manualmente, mas deve ver impacto no balanceamento."
+      "O gerente pode editar manualmente, mas deve ver impacto no balanceamento.",
+      "Se todos estiverem com venda padrao R$ 1,00, explique que o ranking e provisorio por desempate, nao diga que o ranking esta nulo.",
+      "Nao use nomes tecnicos de campos do sistema, como salesRank, assignmentType, null ou JSON."
     ],
     estatisticasCorretores: input.brokerStats,
     conflitosDoMotor: input.conflicts,
@@ -172,7 +195,7 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       recommendations: string[];
     }>({
       system:
-        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil. Seja objetivo, operacional e fiel aos dados. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts, recommendations. recommendations deve ser array de strings.",
+        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. meritocracy deve explicar se a regra de vendas foi aplicada ou se o ranking esta provisoriamente empatado por vendas padrao. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. recommendations deve ter no maximo 3 acoes praticas, sem sugerir violar indisponibilidade. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts, recommendations.",
       user: JSON.stringify(payload),
       schema: {
         type: "OBJECT",

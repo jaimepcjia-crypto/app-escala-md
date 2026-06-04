@@ -4,7 +4,7 @@ import { normalizeWeekStart } from "@/lib/constants";
 import { generateSchedule } from "@/lib/scheduler";
 import { latestConfirmedImport } from "@/lib/import-workflow";
 import { generationWindowStatus } from "@/lib/deadlines";
-import { buildBrokerStats, reviewScheduleWithLlm } from "@/lib/llm";
+import { buildBrokerStatsWithRanks, reviewScheduleWithLlm } from "@/lib/llm";
 
 export async function generateAndPublishSchedule(
   weekStartInput: string | Date,
@@ -118,7 +118,10 @@ export async function generateAndPublishSchedule(
     weekStart,
     assignments: schedule.assignments,
     conflicts: result.conflicts,
-    brokerStats: buildBrokerStats(schedule.assignments)
+    brokerStats: buildBrokerStatsWithRanks(
+      schedule.assignments,
+      new Map(planningData.brokers.map((broker) => [broker.id, broker.salesRank]))
+    )
   });
   const savedReview = await prisma.aiScheduleReview.create({
     data: {
