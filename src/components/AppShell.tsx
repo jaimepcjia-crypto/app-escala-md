@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, CalendarDays, ClipboardList, Eye, Shield } from "lucide-react";
+import { Archive, CalendarDays, ClipboardList, Eye, LogOut, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export function AppShell({ children, active }: { children: React.ReactNode; active: "admin" | "arquivo" | "disponibilidade" | "escala" }) {
   const [role, setRole] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
@@ -29,6 +30,15 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
     if (role === "MANAGER") return managerLinks;
     return active === "admin" || active === "arquivo" ? managerLinks : brokerLinks;
   }, [active, role]);
+
+  async function logout() {
+    try {
+      setLoggingOut(true);
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
 
   return (
     <main className="min-h-screen px-4 py-5 text-ink sm:px-6 lg:px-8">
@@ -61,6 +71,16 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
                 </Link>
               );
             })}
+            <button
+              type="button"
+              onClick={logout}
+              disabled={loggingOut}
+              data-help="Sai desta conta e volta para a tela de login."
+              className="inline-flex items-center gap-2 rounded-md border border-signal/30 bg-signal/10 px-3 py-2 text-sm font-bold text-signal hover:border-signal disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <LogOut size={16} />
+              {loggingOut ? "Saindo" : "Sair"}
+            </button>
           </nav>
         </header>
         {children}

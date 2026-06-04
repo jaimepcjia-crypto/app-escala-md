@@ -107,9 +107,7 @@ function excelHeightToPx(height?: number | null) {
 }
 
 function borderCss(side?: BorderSide) {
-  if (!side?.style) return "1px solid #000";
-  const width = side.style === "thick" ? 3 : side.style === "medium" || side.style === "double" ? 2 : 1;
-  return `${width}px solid ${side.color ?? "#000000"}`;
+  return side?.style ? "1px solid #000000" : "1px solid #000000";
 }
 
 function cssAlign(value?: string | null) {
@@ -225,7 +223,7 @@ export function SpreadsheetScheduleGrid({
 
   return (
     <>
-      <div className="overflow-auto rounded-lg border-4 border-black bg-white">
+      <div className="overflow-auto rounded-lg border border-black bg-white">
         <table className="border-collapse bg-white font-sans" style={{ tableLayout: "fixed" }}>
           <colgroup>
             {layout.columns.map((column) => (

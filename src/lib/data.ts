@@ -69,6 +69,16 @@ function localNameForWindow(window: { importedCell?: { localName?: string | null
   return window.importedCell?.localName || window.dutyType.name;
 }
 
+function buildPlantaoPrioritiesFromNames(names: string[], priorityRows: Array<{ localName: string; position: number }>) {
+  const rowByName = new Map(priorityRows.map((row) => [row.localName, row.position]));
+  return [...new Set(names.filter((name) => name && name !== "JANELA IMPORTADA"))]
+    .map((name, index) => ({
+      localName: name,
+      position: rowByName.get(name) ?? 10_000 + index
+    }))
+    .sort((left, right) => left.position - right.position || left.localName.localeCompare(right.localName));
+}
+
 export function buildPlantaoPriorities(
   windows: Array<{ importedCell?: { localName?: string | null } | null; dutyType: { name: string; priority: number } }>,
   priorityRows: Array<{ localName: string; position: number }>
@@ -102,7 +112,7 @@ export async function getAdminSnapshot(weekStartInput?: string) {
       },
       orderBy: { createdAt: "desc" }
     }),
-    prisma.scheduleImport.findMany({ where: { weekStart }, include: { cells: true }, orderBy: { createdAt: "desc" } }),
+    prisma.scheduleImport.findMany({ where: { weekStart }, include: { cells: { orderBy: [{ rowIndex: "asc" }, { colIndex: "asc" }] } }, orderBy: { createdAt: "desc" } }),
     prisma.unavailabilityConfirmation.findMany({ where: { weekStart }, include: { broker: true } }),
     prisma.brokerMonthlySale.findMany({ where: { monthStart } }),
     prisma.dutyPriority.findMany(),
@@ -126,7 +136,11 @@ export async function getAdminSnapshot(weekStartInput?: string) {
     .sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999) || left.name.localeCompare(right.name));
   const ferreiraBrokers = brokers.filter((broker) => broker.team.isFerreira && broker.active);
   const confirmedBrokerIds = new Set(confirmations.map((item) => item.brokerId));
-  const plantaoPriorities = buildPlantaoPriorities(windows, priorityRows);
+  const confirmedImport = imports.find((item) => item.status === "CONFIRMED") ?? imports[0] ?? null;
+  const importedLocalNames = confirmedImport?.cells.map((cell) => cell.localName ?? "").filter(Boolean) ?? [];
+  const plantaoPriorities = importedLocalNames.length
+    ? buildPlantaoPrioritiesFromNames(importedLocalNames, priorityRows)
+    : buildPlantaoPriorities(windows, priorityRows);
 
   return {
     weekStart: formatWeekStart(weekStart),

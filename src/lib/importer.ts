@@ -111,7 +111,7 @@ function colorHex(color?: Partial<ExcelJS.Color>) {
 }
 
 function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "numeric", timeZone: "America/Sao_Paulo" }).format(value);
+  return new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "numeric", timeZone: "UTC" }).format(value);
 }
 
 function textFromValue(value: ExcelJS.CellValue): string {
@@ -191,6 +191,7 @@ export function inferStartHourFromText(text: string | null, rowIndex = 0) {
 
 function normalizeLocal(label: string | null) {
   const value = normalize(label ?? "");
+  if (value.includes("NOTURNO")) return "PLANTAO NOTURNO";
   if (value.includes("SOMB")) return "STAND / SOMB";
   if (value.includes("BARRA")) return "BARRA";
   if (value.includes("QUIOS")) return "QUIOSQUE";
@@ -206,6 +207,7 @@ function isNameLikeCell(text: string) {
   const value = normalize(text);
   if (!value) return false;
   if (/^\d+$/.test(value)) return false;
+  if (/^\d{1,2}\/\d{1,2}$/.test(value)) return false;
   if (/^\d{1,2}H/.test(value)) return false;
   if (["SEMANA", "SEGUNDA", "TERCA", "QUARTA", "QUINTA", "SEXTA", "SABADO", "DOMINGO"].includes(value)) return false;
   if (value.includes("PLANTAO") || value.includes("HORARIO") || value.includes("LOCAL")) return false;
@@ -234,8 +236,13 @@ function nearestTimeLabel(worksheet: ExcelJS.Worksheet, rowIndex: number, colInd
 
 function rowLocalLabel(worksheet: ExcelJS.Worksheet, rowIndex: number) {
   for (let row = rowIndex; row >= 1; row -= 1) {
-    const text = cellText(worksheet.getRow(row).getCell(2));
-    if (text) return text;
+    const left = cellText(worksheet.getRow(row).getCell(2));
+    const middle = cellText(worksheet.getRow(row).getCell(3));
+    const time = cellText(worksheet.getRow(row).getCell(4));
+    if (normalize(time).includes("PLANTAO NOTURNO")) return time;
+    if (left && middle) return `${left} ${middle}`;
+    if (left) return left;
+    if (middle) return middle;
   }
   return "";
 }
