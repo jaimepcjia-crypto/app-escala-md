@@ -224,6 +224,7 @@ export default function AdminPage() {
     }
     try {
       setIaBusy(true);
+      setIaAnswer(`IA: processando "${command}"...`);
       const response = await fetch("/api/ia/comando", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -318,6 +319,12 @@ export default function AdminPage() {
                 <RefreshCw size={16} />
                 Enviar para IA
               </button>
+              {iaAnswer ? (
+                <div className="ui-font mt-3 rounded-md border border-steel/30 bg-linen/70 p-3 text-xs" aria-live="polite">
+                  <div className="mb-1 font-bold text-ink">Resposta da IA</div>
+                  <pre className="whitespace-pre-wrap">{iaAnswer}</pre>
+                </div>
+              ) : null}
               <div className="mt-2 grid gap-1">
                 {[
                   "IA verifique se todos os corretores ja colocaram suas impossibilidades",
@@ -325,12 +332,17 @@ export default function AdminPage() {
                   "IA me diga porque essa escala esta justa",
                   "IA tente equilibrar mais e gere novamente"
                 ].map((example) => (
-                  <button key={example} className="ui-font rounded border border-graphite/15 px-2 py-1 text-left text-xs hover:border-signal" onClick={() => askIa(example)} data-help="Executa este exemplo de ordem para a IA.">
+                  <button
+                    key={example}
+                    className="ui-font rounded border border-graphite/15 px-2 py-1 text-left text-xs hover:border-signal disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => askIa(example)}
+                    disabled={iaBusy}
+                    data-help="Executa este exemplo de ordem para a IA."
+                  >
                     {example}
                   </button>
                 ))}
               </div>
-              {iaAnswer ? <pre className="ui-font mt-3 whitespace-pre-wrap rounded-md border border-graphite/15 bg-linen/50 p-2 text-xs">{iaAnswer}</pre> : null}
             </div>
             {notice ? <p className="ui-font mt-3 rounded-md border border-graphite/15 bg-paper p-2 text-sm">{notice}</p> : null}
           </div>
