@@ -18,11 +18,11 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   const managerLinks = [
     { href: "/admin", label: "Gerente", key: "admin", icon: Shield, help: "Abre o painel administrativo do Ferreira." },
     { href: "/admin/arquivo", label: "DADOS", key: "arquivo", icon: Archive, help: "Abre importacoes e escalas publicadas anteriores do gerente." },
-    { href: "/disponibilidade", label: "Nao pode", key: "disponibilidade", icon: ClipboardList, help: "Abre a visualizacao mensal de indisponibilidades dos corretores." },
+    { href: "/disponibilidade", label: "INDISPONIBILIDADES", key: "disponibilidade", icon: ClipboardList, help: "Abre a visualizacao mensal de indisponibilidades dos corretores." },
     { href: "/escala", label: "RANKING VENDAS", key: "escala", icon: Eye, help: "Mostra a escala publicada e o ranking de vendas da semana." }
   ] as const;
   const brokerLinks = [
-    { href: "/disponibilidade", label: "Nao pode", key: "disponibilidade", icon: ClipboardList, help: "Abre o calendario mensal para marcar os dias e turnos em que nao pode trabalhar." },
+    { href: "/disponibilidade", label: "INDISPONIBILIDADES", key: "disponibilidade", icon: ClipboardList, help: "Abre o calendario mensal para marcar os dias e turnos em que nao pode trabalhar." },
     { href: "/escala", label: "RANKING VENDAS", key: "escala", icon: Eye, help: "Mostra a escala publicada e o ranking de vendas da semana." }
   ] as const;
   const links = useMemo(() => {
