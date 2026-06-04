@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, CalendarSearch, Loader2, Upload } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { RealScheduleGrid } from "@/components/RealScheduleGrid";
@@ -61,6 +61,7 @@ export default function AdminArchivePage() {
   const [data, setData] = useState<ArchivePayload | null>(null);
   const [selectedScheduleId, setSelectedScheduleId] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -87,19 +88,21 @@ export default function AdminArchivePage() {
 
   async function importSchedule() {
     if (!file) {
-      setNotice("Selecione um PDF, XLS ou XLSX.");
+      setNotice("Clique primeiro em Escolher ficheiro e selecione o PDF ou XLSX semanal recebido pelo Ferreira.");
       return;
     }
     try {
       setBusy(true);
+      setNotice(`Importando ${file.name}...`);
       const formData = new FormData();
       formData.set("weekStart", weekStart);
       formData.set("file", file);
       const response = await fetch("/api/escala/importar", { method: "POST", body: formData });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Falha ao importar escala.");
-      setNotice(`Arquivo importado: ${payload.summary.ferreiraWindows} janelas roxas e ${payload.summary.external} plantões externos.`);
+      setNotice(`Arquivo importado. Agora confirme abaixo para a IA usar: ${payload.summary.ferreiraWindows} janelas roxas e ${payload.summary.external} plantões externos.`);
       setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Falha ao importar escala.");
@@ -156,17 +159,33 @@ export default function AdminArchivePage() {
               <div className="mt-1 text-xs text-graphite">O arquivo importado vale sempre de segunda-feira a domingo.</div>
             </div>
             <input
-              key={file?.name ?? "empty-file"}
+              ref={fileInputRef}
               className="control mb-2 w-full rounded-md px-3 py-2 text-sm"
               type="file"
-              accept=".pdf,.xlsx,.xls"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              data-help="Seleciona o PDF, XLS ou XLSX semanal recebido pelo Ferreira."
+              accept=".pdf,.xlsx"
+              onChange={(event) => {
+                const selectedFile = event.target.files?.[0] ?? null;
+                setFile(selectedFile);
+                setNotice(selectedFile ? `Arquivo escolhido: ${selectedFile.name}. Clique em Importar PDF/XLSX.` : "");
+              }}
+              data-help="Seleciona o PDF ou XLSX semanal recebido pelo Ferreira."
             />
-            <button className="ui-font inline-flex w-full items-center justify-center gap-2 rounded-md bg-ink px-3 py-2 font-bold text-paper" onClick={importSchedule} data-help="Envia o arquivo para leitura das janelas roxas e plantões externos.">
-              <Upload size={16} />
+            <div className="ui-font mb-2 rounded-md border border-graphite/15 bg-paper p-2 text-xs">
+              <span className="font-bold">Arquivo selecionado: </span>
+              <span className={file ? "text-ink" : "text-graphite"}>{file?.name ?? "nenhum arquivo selecionado"}</span>
+            </div>
+            <button
+              className="ui-font inline-flex w-full items-center justify-center gap-2 rounded-md bg-ink px-3 py-2 font-bold text-paper disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={importSchedule}
+              disabled={busy || !file}
+              data-help="Envia o arquivo para leitura das janelas roxas e plantões externos."
+            >
+              {busy ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
               Importar PDF/XLSX
             </button>
+            <p className="ui-font mt-2 text-xs text-graphite">
+              Fluxo: escolha o arquivo, importe, confirme o arquivo na lista abaixo e então peça para a IA gerar e publicar a escala.
+            </p>
             {notice ? <p className="ui-font mt-3 rounded-md border border-graphite/15 bg-paper p-2 text-sm">{notice}</p> : null}
           </section>
 
