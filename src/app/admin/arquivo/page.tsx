@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, CalendarSearch, Loader2, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Archive, Download, Loader2, Upload } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { BrokersSalesPanel, type BrokerSnapshot } from "@/components/BrokersSalesPanel";
-import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -60,18 +59,21 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" }).format(new Date(value));
 }
 
+function historyScheduleLabel(weekStart: string) {
+  const start = normalizeWeekStart(weekStart);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(start);
+  return `Semana ${formatDate(start.toISOString())} a ${formatDate(end.toISOString())} · ${month}`;
+}
+
 export default function AdminArchivePage() {
   const [weekStart, setWeekStart] = useState(initialWeek);
   const [data, setData] = useState<ArchivePayload | null>(null);
-  const [selectedScheduleId, setSelectedScheduleId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-
-  const selectedSchedule = useMemo(() => {
-    return data?.schedules.find((schedule) => schedule.id === selectedScheduleId) ?? data?.schedules[0] ?? null;
-  }, [data, selectedScheduleId]);
 
   async function load() {
     setBusy(true);
@@ -82,7 +84,6 @@ export default function AdminArchivePage() {
     }
     const payload = await response.json();
     setData(payload);
-    setSelectedScheduleId((current) => current || payload.schedules[0]?.id || "");
     setBusy(false);
   }
 
@@ -284,29 +285,6 @@ export default function AdminArchivePage() {
             </div>
           </section>
 
-          <section className="panel rounded-lg p-4">
-            <h2 className="mb-3 text-xl font-bold">Escalas publicadas</h2>
-            <div className="grid gap-2">
-              {data?.schedules.length ? data.schedules.map((schedule) => (
-                <button
-                  key={schedule.id}
-                  className={`ui-font rounded-md border p-3 text-left text-sm ${selectedSchedule?.id === schedule.id ? "border-ink bg-ink text-paper" : "border-graphite/15 bg-paper hover:border-signal"}`}
-                  onClick={() => setSelectedScheduleId(schedule.id)}
-                  data-help="Abre esta escala publicada no arquivo do gerente."
-                >
-                  <span className="mb-1 flex items-center justify-between gap-2">
-                    <strong>Semana {formatDate(schedule.weekStart)}</strong>
-                    <CalendarSearch size={16} />
-                  </span>
-                  <span className="block text-xs opacity-80">
-                    Publicada em {formatDate(schedule.publishedAt)} · {schedule.importFileName ?? "sem arquivo vinculado"}
-                  </span>
-                </button>
-              )) : (
-                <p className="ui-font rounded-md border border-graphite/15 bg-paper p-3 text-sm text-graphite">Nenhuma escala publicada ainda.</p>
-              )}
-            </div>
-          </section>
         </aside>
 
         <div className="flex flex-col gap-5">
@@ -323,15 +301,35 @@ export default function AdminArchivePage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Histórico exclusivo do gerente</p>
-                <h2 className="text-xl font-bold">{selectedSchedule ? `Semana ${formatDate(selectedSchedule.weekStart)}` : "Nenhuma escala selecionada"}</h2>
+                <h2 className="text-xl font-bold">Escalas publicadas para download</h2>
               </div>
-              {selectedSchedule ? <StatusPill tone="ok">publicada</StatusPill> : <StatusPill tone="warn">sem escala</StatusPill>}
+              <StatusPill tone={data?.schedules.length ? "ok" : "warn"}>{data?.schedules.length ?? 0} publicadas</StatusPill>
             </div>
-            {selectedSchedule?.assignments.length ? (
-              <SpreadsheetScheduleGrid schedule={selectedSchedule} />
+            {data?.schedules.length ? (
+              <div className="grid gap-2">
+                {data.schedules.map((schedule) => (
+                  <a
+                    key={schedule.id}
+                    className="ui-font flex flex-wrap items-center justify-between gap-3 rounded-md border border-graphite/15 bg-paper p-3 text-sm hover:border-signal hover:bg-white"
+                    href={`/api/admin/archive/${schedule.id}/download`}
+                    data-help="Baixa esta escala publicada em formato XLSX."
+                  >
+                    <span>
+                      <strong>{historyScheduleLabel(schedule.weekStart)}</strong>
+                      <span className="block text-xs text-graphite">
+                        Publicada em {formatDate(schedule.publishedAt)} · {schedule.importFileName ?? "sem arquivo vinculado"}
+                      </span>
+                    </span>
+                    <span className="inline-flex items-center gap-2 rounded-md bg-ink px-3 py-2 text-xs font-bold text-paper">
+                      <Download size={14} />
+                      Baixar XLSX
+                    </span>
+                  </a>
+                ))}
+              </div>
             ) : (
               <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
-                Selecione uma escala publicada para visualizar o histórico.
+                Nenhuma escala publicada ainda. Quando Ferreira publicar uma escala, ela aparecera aqui como link de download.
               </div>
             )}
           </section>
