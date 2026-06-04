@@ -19,15 +19,16 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const cells = await parseScheduleFile(file.name, buffer);
+    const parsed = await parseScheduleFile(file.name, buffer);
 
     const scheduleImport = await prisma.scheduleImport.create({
       data: {
         weekStart,
         fileName: file.name,
         fileType: file.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
+        layoutJson: JSON.stringify(parsed.layout),
         cells: {
-          create: cells.map((cell) => ({
+          create: parsed.cells.map((cell) => ({
             rowIndex: cell.rowIndex,
             colIndex: cell.colIndex,
             rowLabel: cell.rowLabel,

@@ -56,6 +56,13 @@ export async function GET(request: NextRequest) {
       status: schedule.status,
       publishedAt: schedule.publishedAt?.toISOString() ?? null,
       importFileName: schedule.import?.fileName ?? null,
+      import: schedule.import
+        ? {
+            id: schedule.import.id,
+            fileName: schedule.import.fileName,
+            layoutJson: schedule.import.layoutJson
+          }
+        : null,
       assignments: schedule.assignments
     }))
   });

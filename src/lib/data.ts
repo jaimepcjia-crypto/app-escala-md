@@ -96,6 +96,7 @@ export async function getAdminSnapshot(weekStartInput?: string) {
     prisma.schedule.findMany({
       where: { weekStart },
       include: {
+        import: true,
         assignments: { include: { broker: { include: { team: true } }, dutyType: true, importedCell: true, manualAlerts: true } },
         aiReview: true
       },
@@ -155,6 +156,7 @@ export async function getPublishedSchedule(weekStartInput?: string, options: { f
   const schedule = await prisma.schedule.findFirst({
     where: { weekStart, status: "PUBLISHED" },
     include: {
+      import: true,
       assignments: {
         where: options.ferreiraOnly ? { assignmentType: { not: "EXTERNAL_IMPORTED" } } : undefined,
         include: { broker: { include: { team: true } }, dutyType: true, importedCell: true, manualAlerts: true },

@@ -178,6 +178,7 @@ model ScheduleImport {
   fileName    String
   fileType    String
   status      String   @default("PENDING_REVIEW")
+  layoutJson  String?
   createdAt   DateTime @default(now())
   confirmedAt DateTime?
   cells       ImportedScheduleCell[]

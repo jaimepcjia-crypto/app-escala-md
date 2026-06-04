@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowDown, ArrowUp, Check, GripVertical, KeyRound, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { RealScheduleGrid } from "@/components/RealScheduleGrid";
+import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -25,7 +25,7 @@ type Snapshot = {
   salesMonthStart: string;
   teams: { id: string; name: string; isFerreira: boolean }[];
   brokers: BrokerSnapshot[];
-  schedules: Array<{ id: string; status: "DRAFT" | "PUBLISHED"; assignments: any[]; publishedAt?: string | null; aiReview?: any | null }>;
+  schedules: Array<{ id: string; status: "DRAFT" | "PUBLISHED"; import?: { id: string; fileName: string; layoutJson?: string | null } | null; assignments: any[]; publishedAt?: string | null; aiReview?: any | null }>;
   imports: Array<{ id: string; fileName: string; status: string; cells: Array<{ id: string; ownerType: string }> }>;
   readiness: { totalFerreiraBrokers: number; confirmed: number; allConfirmed: boolean };
   plantaoPriorities: Array<{ localName: string; position: number }>;
@@ -389,7 +389,7 @@ export default function AdminPage() {
           <div className="panel rounded-lg p-4">
             <h2 className="mb-2 text-xl font-bold">Arquivos e historico</h2>
             <p className="ui-font mb-3 text-sm text-graphite">
-              Importacoes de PDF/XLSX e escalas publicadas anteriores ficam em uma area separada, restrita ao gerente.
+              Importacoes de XLSX e escalas publicadas anteriores ficam em uma area separada, restrita ao gerente.
             </p>
             <Link className="ui-font inline-flex w-full items-center justify-center rounded-md bg-ink px-3 py-2 font-bold text-paper" href="/admin/arquivo" data-help="Abre importacoes e escalas antigas do gerente.">
               Abrir arquivo
@@ -449,7 +449,7 @@ export default function AdminPage() {
             {schedule?.assignments?.length ? (
               <>
                 {schedule.aiReview ? <AiReviewCard review={schedule.aiReview} /> : null}
-                <RealScheduleGrid assignments={schedule.assignments} brokers={snapshot?.brokers.filter((broker) => broker.team.isFerreira) ?? []} editable onChange={adjustAssignment} />
+                <SpreadsheetScheduleGrid schedule={schedule} brokers={snapshot?.brokers.filter((broker) => broker.team.isFerreira) ?? []} editable onChange={adjustAssignment} />
               </>
             ) : (
               <div className="ui-font flex items-center gap-2 rounded-md border border-signal/20 bg-signal/10 p-3 text-sm text-signal">

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, CalendarSearch, Loader2, Upload } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { RealScheduleGrid } from "@/components/RealScheduleGrid";
+import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -24,6 +24,7 @@ type ArchiveSchedule = {
   status: string;
   publishedAt?: string | null;
   importFileName?: string | null;
+  import?: { id: string; fileName: string; layoutJson?: string | null } | null;
   assignments: any[];
 };
 
@@ -88,7 +89,7 @@ export default function AdminArchivePage() {
 
   async function importSchedule() {
     if (!file) {
-      setNotice("Clique primeiro em Escolher ficheiro e selecione o PDF ou XLSX semanal recebido pelo Ferreira.");
+      setNotice("Clique primeiro em Escolher ficheiro e selecione o XLSX semanal recebido pelo Ferreira.");
       return;
     }
     try {
@@ -162,13 +163,13 @@ export default function AdminArchivePage() {
               ref={fileInputRef}
               className="control mb-2 w-full rounded-md px-3 py-2 text-sm"
               type="file"
-              accept=".pdf,.xlsx"
+              accept=".xlsx"
               onChange={(event) => {
                 const selectedFile = event.target.files?.[0] ?? null;
                 setFile(selectedFile);
-                setNotice(selectedFile ? `Arquivo escolhido: ${selectedFile.name}. Clique em Importar PDF/XLSX.` : "");
+                setNotice(selectedFile ? `Arquivo escolhido: ${selectedFile.name}. Clique em Importar XLSX.` : "");
               }}
-              data-help="Seleciona o PDF ou XLSX semanal recebido pelo Ferreira."
+              data-help="Seleciona o XLSX semanal recebido pelo Ferreira."
             />
             <div className="ui-font mb-2 rounded-md border border-graphite/15 bg-paper p-2 text-xs">
               <span className="font-bold">Arquivo selecionado: </span>
@@ -178,13 +179,14 @@ export default function AdminArchivePage() {
               className="ui-font inline-flex w-full items-center justify-center gap-2 rounded-md bg-ink px-3 py-2 font-bold text-paper disabled:cursor-not-allowed disabled:opacity-50"
               onClick={importSchedule}
               disabled={busy || !file}
-              data-help="Envia o arquivo para leitura das janelas roxas e plantões externos."
+              data-help="Envia o XLSX para preservar a formatação original e ler as janelas roxas."
             >
               {busy ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
-              Importar PDF/XLSX
+              Importar XLSX
             </button>
             <p className="ui-font mt-2 text-xs text-graphite">
-              Fluxo: escolha o arquivo, importe, confirme o arquivo na lista abaixo e então peça para a IA gerar e publicar a escala.
+              Fluxo: escolha o XLSX, importe, confirme o arquivo na lista abaixo e então peça para a IA gerar e publicar a escala.
+              Para manter a escala fiel ao arquivo original, PDF e XLS antigo são rejeitados.
             </p>
             {notice ? <p className="ui-font mt-3 rounded-md border border-graphite/15 bg-paper p-2 text-sm">{notice}</p> : null}
           </section>
@@ -247,7 +249,7 @@ export default function AdminArchivePage() {
             {selectedSchedule ? <StatusPill tone="ok">publicada</StatusPill> : <StatusPill tone="warn">sem escala</StatusPill>}
           </div>
           {selectedSchedule?.assignments.length ? (
-            <RealScheduleGrid assignments={selectedSchedule.assignments} />
+            <SpreadsheetScheduleGrid schedule={selectedSchedule} />
           ) : (
             <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
               Selecione uma escala publicada para visualizar o histórico.

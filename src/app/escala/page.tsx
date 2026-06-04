@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CalendarX2, Filter } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { RealScheduleGrid } from "@/components/RealScheduleGrid";
+import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -15,6 +16,7 @@ type PublicData = {
     id: string;
     status: string;
     publishedAt?: string | null;
+    import?: { id: string; fileName: string; layoutJson?: string | null } | null;
     assignments: any[];
   };
 };
@@ -97,7 +99,11 @@ export default function PublicSchedulePage() {
         </div>
 
         {data?.schedule?.assignments?.length ? (
-          <RealScheduleGrid assignments={data.schedule.assignments} highlightBrokerId={me?.role === "BROKER" ? me.broker?.id : null} />
+          ferreiraOnly ? (
+            <RealScheduleGrid assignments={data.schedule.assignments} highlightBrokerId={me?.role === "BROKER" ? me.broker?.id : null} />
+          ) : (
+            <SpreadsheetScheduleGrid schedule={data.schedule} highlightBrokerId={me?.role === "BROKER" ? me.broker?.id : null} />
+          )
         ) : (
           <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
             Nenhuma escala publicada para a semana selecionada.

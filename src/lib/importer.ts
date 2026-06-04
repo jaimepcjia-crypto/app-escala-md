@@ -1,7 +1,3 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { spawn } from "node:child_process";
 import ExcelJS from "exceljs";
 
 export type ImportCellCandidate = {
@@ -21,14 +17,65 @@ export type ImportCellCandidate = {
   confidence: number;
 };
 
-const PURPLE = { r: 180, g: 167, b: 214 };
+type BorderSide = { style?: string; color?: string | null } | null;
 
-function distance(hex: string) {
-  const normalized = hex.replace("#", "");
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  return Math.sqrt((r - PURPLE.r) ** 2 + (g - PURPLE.g) ** 2 + (b - PURPLE.b) ** 2);
+export type XlsxLayoutCell = {
+  rowIndex: number;
+  colIndex: number;
+  text: string;
+  rowSpan: number;
+  colSpan: number;
+  skip?: boolean;
+  ownerType?: "FERREIRA_WINDOW" | "EXTERNAL_IMPORTED" | null;
+  style: {
+    fillColor?: string | null;
+    fontColor?: string | null;
+    bold?: boolean;
+    italic?: boolean;
+    fontSize?: number | null;
+    horizontal?: string | null;
+    vertical?: string | null;
+    wrapText?: boolean;
+    textRotation?: number | string | null;
+    border?: { top?: BorderSide; right?: BorderSide; bottom?: BorderSide; left?: BorderSide };
+  };
+};
+
+export type XlsxScheduleLayout = {
+  version: 1;
+  sheetName: string;
+  rowCount: number;
+  columnCount: number;
+  rows: Array<{ index: number; height?: number | null }>;
+  columns: Array<{ index: number; width?: number | null }>;
+  merges: Array<{ top: number; left: number; bottom: number; right: number }>;
+  cells: XlsxLayoutCell[];
+};
+
+export type ParsedScheduleFile = {
+  cells: ImportCellCandidate[];
+  layout: XlsxScheduleLayout;
+};
+
+const PURPLE = { r: 180, g: 167, b: 214 };
+const dayMap = new Map([
+  ["SEGUNDA", "MONDAY"],
+  ["TERCA", "TUESDAY"],
+  ["TERÇA", "TUESDAY"],
+  ["QUARTA", "WEDNESDAY"],
+  ["QUINTA", "THURSDAY"],
+  ["SEXTA", "FRIDAY"],
+  ["SABADO", "SATURDAY"],
+  ["SÁBADO", "SATURDAY"],
+  ["DOMINGO", "SUNDAY"]
+]);
+
+function normalize(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase()
+    .trim();
 }
 
 function argbToHex(argb?: string) {
@@ -38,25 +85,97 @@ function argbToHex(argb?: string) {
   return `#${value.toUpperCase()}`;
 }
 
-function ownerType(colorHex: string | null, text: string): ImportCellCandidate["ownerType"] | null {
-  const hasText = Boolean(text.trim());
-  if (!colorHex) return hasText ? "EXTERNAL_IMPORTED" : null;
-  if (distance(colorHex) <= 45) return "FERREIRA_WINDOW";
-  return hasText ? "EXTERNAL_IMPORTED" : null;
+function rgb(hex: string) {
+  const normalized = hex.replace("#", "");
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16)
+  };
 }
 
-function inferDayFromColumn(index: number) {
-  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
-  return days[(index - 1) % 7] ?? null;
+function isPurpleFerreira(colorHex: string | null) {
+  if (!colorHex) return false;
+  const color = rgb(colorHex);
+  const distance = Math.sqrt((color.r - PURPLE.r) ** 2 + (color.g - PURPLE.g) ** 2 + (color.b - PURPLE.b) ** 2);
+  return distance <= 45 && color.b > color.r + 20 && color.b > color.g + 20;
 }
 
-function inferShiftFromText(text: string | null, rowIndex: number) {
-  const value = (text ?? "").toLowerCase();
-  if (value.includes("8h") || value.includes("9h")) return "MORNING";
-  if (value.includes("12h") || value.includes("13h") || value.includes("14h")) return "AFTERNOON";
-  if (value.includes("16h") || value.includes("17h")) return "NIGHT";
-  if (rowIndex < 15) return "MORNING";
-  if (rowIndex < 35) return "AFTERNOON";
+function fillHex(cell: ExcelJS.Cell) {
+  const fill = cell.fill;
+  return fill?.type === "pattern" ? argbToHex(fill.fgColor?.argb) : null;
+}
+
+function colorHex(color?: Partial<ExcelJS.Color>) {
+  return argbToHex(color?.argb);
+}
+
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "numeric", timeZone: "America/Sao_Paulo" }).format(value);
+}
+
+function textFromValue(value: ExcelJS.CellValue): string {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return formatDate(value);
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).trim();
+  if ("richText" in value && Array.isArray(value.richText)) return value.richText.map((part) => part.text).join("").trim();
+  if ("text" in value && value.text !== undefined) return String(value.text).trim();
+  if ("result" in value) return textFromValue(value.result as ExcelJS.CellValue);
+  if ("formula" in value) return String(value.formula ?? "").trim();
+  return "";
+}
+
+function cellText(cell: ExcelJS.Cell) {
+  const valueText = textFromValue(cell.value);
+  if (valueText && valueText !== "[object Object]") return valueText;
+  try {
+    const text = cell.text?.trim() ?? "";
+    return text === "[object Object]" ? "" : text;
+  } catch {
+    return "";
+  }
+}
+
+function parseRange(range: string) {
+  const match = range.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  const toNumber = (letters: string) => letters.split("").reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0);
+  const left = toNumber(match[1]);
+  const top = Number(match[2]);
+  const right = toNumber(match[3]);
+  const bottom = Number(match[4]);
+  return { top, left, bottom, right };
+}
+
+function borderSide(side?: Partial<ExcelJS.Border>) {
+  if (!side?.style) return null;
+  return { style: side.style, color: colorHex(side.color) };
+}
+
+function cellStyle(cell: ExcelJS.Cell): XlsxLayoutCell["style"] {
+  return {
+    fillColor: fillHex(cell),
+    fontColor: colorHex(cell.font?.color),
+    bold: Boolean(cell.font?.bold),
+    italic: Boolean(cell.font?.italic),
+    fontSize: cell.font?.size ?? null,
+    horizontal: cell.alignment?.horizontal ?? null,
+    vertical: cell.alignment?.vertical ?? null,
+    wrapText: Boolean(cell.alignment?.wrapText),
+    textRotation: cell.alignment?.textRotation ?? null,
+    border: {
+      top: borderSide(cell.border?.top),
+      right: borderSide(cell.border?.right),
+      bottom: borderSide(cell.border?.bottom),
+      left: borderSide(cell.border?.left)
+    }
+  };
+}
+
+function inferShiftFromStartHour(startHour: number | null) {
+  if (startHour === null) return "MORNING";
+  if (startHour < 12) return "MORNING";
+  if (startHour < 16) return "AFTERNOON";
   return "NIGHT";
 }
 
@@ -65,14 +184,13 @@ export function inferStartHourFromText(text: string | null, rowIndex = 0) {
   if (value.includes("plantao noturno") || value.includes("plantão noturno")) return 20;
   const match = value.match(/(?:^|[^\d])([01]?\d|2[0-3])\s*h/);
   if (match) return Number(match[1]);
-  const shift = inferShiftFromText(text, rowIndex);
-  if (shift === "MORNING") return 8;
-  if (shift === "AFTERNOON") return 12;
+  if (rowIndex < 15) return 8;
+  if (rowIndex < 35) return 12;
   return 20;
 }
 
 function normalizeLocal(label: string | null) {
-  const value = (label ?? "").toUpperCase();
+  const value = normalize(label ?? "");
   if (value.includes("SOMB")) return "STAND / SOMB";
   if (value.includes("BARRA")) return "BARRA";
   if (value.includes("QUIOS")) return "QUIOSQUE";
@@ -84,90 +202,174 @@ function normalizeLocal(label: string | null) {
   return label || "JANELA IMPORTADA";
 }
 
-function isUsefulExternalText(text: string, rowIndex: number, colIndex: number) {
-  const value = text.trim();
+function isNameLikeCell(text: string) {
+  const value = normalize(text);
   if (!value) return false;
-  if (rowIndex <= 2 || colIndex <= 2) return false;
-  const upper = value.toUpperCase();
-  if (["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM", "M", "T", "N"].includes(upper)) return false;
-  if (upper.includes("PLANTAO") || upper.includes("HORARIO") || upper.includes("CORRETOR")) return false;
+  if (/^\d+$/.test(value)) return false;
+  if (/^\d{1,2}H/.test(value)) return false;
+  if (["SEMANA", "SEGUNDA", "TERCA", "QUARTA", "QUINTA", "SEXTA", "SABADO", "DOMINGO"].includes(value)) return false;
+  if (value.includes("PLANTAO") || value.includes("HORARIO") || value.includes("LOCAL")) return false;
   return true;
 }
 
-export async function parseXlsxSchedule(buffer: Buffer): Promise<ImportCellCandidate[]> {
+function dayColumns(worksheet: ExcelJS.Worksheet, maxCol: number) {
+  const days = new Map<number, string>();
+  for (let colIndex = 1; colIndex <= maxCol; colIndex += 1) {
+    const value = normalize(cellText(worksheet.getRow(2).getCell(colIndex)));
+    const day = dayMap.get(value);
+    if (day) days.set(colIndex, day);
+  }
+  return days;
+}
+
+function nearestTimeLabel(worksheet: ExcelJS.Worksheet, rowIndex: number, colIndex: number) {
+  const candidates = colIndex >= 12 ? [colIndex - 1, colIndex - 2, 4] : [4, colIndex - 1];
+  for (const candidate of candidates) {
+    if (candidate <= 0) continue;
+    const text = cellText(worksheet.getRow(rowIndex).getCell(candidate));
+    if (/\d{1,2}h/i.test(text) || normalize(text).includes("PLANTAO NOTURNO")) return text;
+  }
+  return "";
+}
+
+function rowLocalLabel(worksheet: ExcelJS.Worksheet, rowIndex: number) {
+  for (let row = rowIndex; row >= 1; row -= 1) {
+    const text = cellText(worksheet.getRow(row).getCell(2));
+    if (text) return text;
+  }
+  return "";
+}
+
+function hasVisibleContent(cell: ExcelJS.Cell) {
+  return Boolean(cellText(cell) || fillHex(cell) || cell.border?.top || cell.border?.right || cell.border?.bottom || cell.border?.left);
+}
+
+function usedRange(worksheet: ExcelJS.Worksheet) {
+  let maxTextRow = 1;
+  let maxTextCol = 1;
+  worksheet.eachRow({ includeEmpty: true }, (row, rowIndex) => {
+    for (let colIndex = 1; colIndex <= Math.min(worksheet.columnCount, 40); colIndex += 1) {
+      const cell = row.getCell(colIndex);
+      if (cellText(cell)) {
+        maxTextRow = Math.max(maxTextRow, rowIndex);
+        maxTextCol = Math.max(maxTextCol, colIndex);
+      }
+    }
+  });
+  const maxRow = Math.min(maxTextRow, 120);
+  const maxCol = Math.min(Math.max(maxTextCol, 14), 20);
+  return { maxRow, maxCol };
+}
+
+function buildLayout(worksheet: ExcelJS.Worksheet, maxRow: number, maxCol: number, ownerByPosition: Map<string, ImportCellCandidate["ownerType"]>): XlsxScheduleLayout {
+  const parsedMerges = (worksheet.model.merges ?? [])
+    .map(parseRange)
+    .filter((merge): merge is { top: number; left: number; bottom: number; right: number } => Boolean(merge))
+    .filter((merge) => merge.top <= maxRow && merge.left <= maxCol);
+  const mergeMaster = new Map<string, { top: number; left: number; bottom: number; right: number }>();
+  const mergeCovered = new Set<string>();
+  for (const merge of parsedMerges) {
+    mergeMaster.set(`${merge.top}:${merge.left}`, merge);
+    for (let row = merge.top; row <= merge.bottom; row += 1) {
+      for (let col = merge.left; col <= merge.right; col += 1) {
+        if (row !== merge.top || col !== merge.left) mergeCovered.add(`${row}:${col}`);
+      }
+    }
+  }
+
+  const cells: XlsxLayoutCell[] = [];
+  for (let rowIndex = 1; rowIndex <= maxRow; rowIndex += 1) {
+    const row = worksheet.getRow(rowIndex);
+    for (let colIndex = 1; colIndex <= maxCol; colIndex += 1) {
+      const key = `${rowIndex}:${colIndex}`;
+      const merge = mergeMaster.get(key);
+      if (mergeCovered.has(key)) {
+        cells.push({ rowIndex, colIndex, text: "", rowSpan: 1, colSpan: 1, skip: true, style: cellStyle(row.getCell(colIndex)) });
+        continue;
+      }
+      const cell = row.getCell(colIndex);
+      cells.push({
+        rowIndex,
+        colIndex,
+        text: cellText(cell),
+        rowSpan: merge ? merge.bottom - merge.top + 1 : 1,
+        colSpan: merge ? merge.right - merge.left + 1 : 1,
+        ownerType: ownerByPosition.get(key) ?? null,
+        style: cellStyle(cell)
+      });
+    }
+  }
+
+  return {
+    version: 1,
+    sheetName: worksheet.name,
+    rowCount: maxRow,
+    columnCount: maxCol,
+    rows: Array.from({ length: maxRow }, (_, index) => {
+      const row = worksheet.getRow(index + 1);
+      return { index: index + 1, height: row.height ?? null };
+    }),
+    columns: Array.from({ length: maxCol }, (_, index) => {
+      const column = worksheet.getColumn(index + 1);
+      return { index: index + 1, width: column.width ?? null };
+    }),
+    merges: parsedMerges,
+    cells
+  };
+}
+
+export async function parseXlsxSchedule(buffer: Buffer): Promise<ParsedScheduleFile> {
   const workbook = new ExcelJS.Workbook();
   const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
   await workbook.xlsx.load(arrayBuffer);
   const worksheet = workbook.worksheets[0];
+  const { maxRow, maxCol } = usedRange(worksheet);
+  const daysByColumn = dayColumns(worksheet, maxCol);
   const candidates: ImportCellCandidate[] = [];
+  const ownerByPosition = new Map<string, ImportCellCandidate["ownerType"]>();
 
-  worksheet.eachRow((row, rowIndex) => {
-    let rowLabel = "";
-    row.eachCell({ includeEmpty: true }, (cell, colIndex) => {
-      const rawText = String(cell.value ?? "").trim();
-      if (colIndex <= 2 && rawText) rowLabel = rawText;
-      const fill = cell.fill;
-      const colorHex = fill?.type === "pattern" ? argbToHex(fill.fgColor?.argb) : null;
-      const type = ownerType(colorHex, rawText);
-      if (!type) return;
-      if (type === "EXTERNAL_IMPORTED" && !isUsefulExternalText(rawText, rowIndex, colIndex)) return;
-      const localName = normalizeLocal(rowLabel);
-      const shift = inferShiftFromText(rowLabel || rawText, rowIndex);
-      const startHour = inferStartHourFromText(`${rowLabel} ${rawText}`.trim(), rowIndex);
-      candidates.push({
+  for (let rowIndex = 1; rowIndex <= maxRow; rowIndex += 1) {
+    const row = worksheet.getRow(rowIndex);
+    for (let colIndex = 1; colIndex <= maxCol; colIndex += 1) {
+      const dayOfWeek = daysByColumn.get(colIndex);
+      if (!dayOfWeek) continue;
+      const cell = row.getCell(colIndex);
+      if (!hasVisibleContent(cell)) continue;
+      const rawText = cellText(cell);
+      const colorHex = fillHex(cell);
+      const ownerType = isPurpleFerreira(colorHex) ? "FERREIRA_WINDOW" : isNameLikeCell(rawText) ? "EXTERNAL_IMPORTED" : null;
+      if (!ownerType) continue;
+      const localLabel = rowLocalLabel(worksheet, rowIndex);
+      const timeLabel = nearestTimeLabel(worksheet, rowIndex, colIndex);
+      const startHour = inferStartHourFromText(`${timeLabel} ${rawText}`.trim(), rowIndex);
+      const candidate = {
         rowIndex,
         colIndex,
-        rowLabel,
-        colLabel: worksheet.getRow(2).getCell(colIndex).text || worksheet.getRow(1).getCell(colIndex).text || null,
-        localName,
-        timeLabel: rowLabel || null,
-        dayOfWeek: inferDayFromColumn(colIndex),
-        shift,
+        rowLabel: localLabel,
+        colLabel: cellText(worksheet.getRow(2).getCell(colIndex)) || null,
+        localName: normalizeLocal(localLabel),
+        timeLabel: timeLabel || null,
+        dayOfWeek,
+        shift: inferShiftFromStartHour(startHour),
         startHour,
-        dateLabel: worksheet.getRow(1).getCell(colIndex).text || null,
+        dateLabel: cellText(worksheet.getRow(1).getCell(colIndex)) || null,
         text: rawText,
         colorHex,
-        ownerType: type,
-        confidence: type === "FERREIRA_WINDOW" ? 0.92 : 0.82
-      });
-    });
-  });
-
-  return candidates;
-}
-
-export async function parsePdfSchedule(buffer: Buffer, fileName: string): Promise<ImportCellCandidate[]> {
-  const dir = await mkdtemp(join(tmpdir(), "escala-md-"));
-  const pdfPath = join(dir, fileName.replace(/[^a-zA-Z0-9_.-]/g, "_") || "escala.pdf");
-  await writeFile(pdfPath, buffer);
-  try {
-    const output = await new Promise<string>((resolve, reject) => {
-      const child = spawn("python", [join(/*turbopackIgnore: true*/ process.cwd(), "scripts", "parse-pdf-schedule.py"), pdfPath], {
-        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (chunk) => {
-        stdout += chunk.toString();
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr += chunk.toString();
-      });
-      child.on("close", (code) => {
-        if (code === 0) resolve(stdout);
-        else reject(new Error(stderr || `Parser PDF finalizou com codigo ${code}`));
-      });
-    });
-    return JSON.parse(output).cells ?? [];
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+        ownerType,
+        confidence: ownerType === "FERREIRA_WINDOW" ? 0.98 : 0.9
+      } satisfies ImportCellCandidate;
+      candidates.push(candidate);
+      ownerByPosition.set(`${rowIndex}:${colIndex}`, ownerType);
+    }
   }
+
+  return { cells: candidates, layout: buildLayout(worksheet, maxRow, maxCol, ownerByPosition) };
 }
 
-export async function parseScheduleFile(fileName: string, buffer: Buffer) {
+export async function parseScheduleFile(fileName: string, buffer: Buffer): Promise<ParsedScheduleFile> {
   const lower = fileName.toLowerCase();
-  if (lower.endsWith(".pdf")) return parsePdfSchedule(buffer, fileName);
-  if (lower.endsWith(".xlsx")) return parseXlsxSchedule(buffer);
-  throw new Error("Formato ainda nao suportado. Envie PDF ou XLSX.");
+  if (!lower.endsWith(".xlsx")) {
+    throw new Error("Para manter a formatação fiel, envie XLSX.");
+  }
+  return parseXlsxSchedule(buffer);
 }
