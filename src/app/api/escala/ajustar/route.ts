@@ -76,10 +76,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const snapshot = await getAdminSnapshot(assignment.schedule.weekStart.toISOString());
-    const brokerRank = snapshot.brokers.find((item) => item.id === brokerId)?.salesRank ?? null;
+    const brokerSnapshot = snapshot.brokers.find((item) => item.id === brokerId) ?? null;
     const localName = assignmentLocalName(assignment);
     const priorityIndex = snapshot.plantaoPriorities.findIndex((item) => item.localName === localName);
-    if (brokerRank && priorityIndex >= 0 && priorityIndex < 3) {
+    const activeFerreiraSales = new Set(snapshot.brokers.filter((item) => item.team.isFerreira && item.active).map((item) => item.salesAmountCents));
+    if (brokerSnapshot?.salesRank && activeFerreiraSales.size > 1 && priorityIndex >= 0 && priorityIndex < 3) {
       const sameLocal = ferreiraAssignments
         .filter((item) => assignmentLocalName(item) === localName)
         .sort((left, right) =>
@@ -92,8 +93,11 @@ export async function PATCH(request: NextRequest) {
       const isReservedSlot = currentIndex >= 0 && currentIndex < reservedCount;
       const expectedStart = priorityIndex * 2 + 1;
       const expectedEnd = expectedStart + 1;
-      if (isReservedSlot && (brokerRank < expectedStart || brokerRank > expectedEnd)) {
-        alerts.push(`Reserva meritocratica quebrada: ${localName} prioriza rankings ${expectedStart}o e ${expectedEnd}o nas vagas reservadas; ${broker.name} esta em ${brokerRank}o.`);
+      const brokerStart = brokerSnapshot.salesOrdinalStart ?? brokerSnapshot.salesRank;
+      const brokerEnd = brokerSnapshot.salesOrdinalEnd ?? brokerSnapshot.salesRank;
+      const intersectsReservedRange = brokerStart <= expectedEnd && brokerEnd >= expectedStart;
+      if (isReservedSlot && !intersectsReservedRange) {
+        alerts.push(`Reserva meritocratica quebrada: ${localName} prioriza a faixa de vendas ${expectedStart}o a ${expectedEnd}o nas vagas reservadas; ${broker.name} esta em ${brokerSnapshot.salesRankLabel}.`);
       }
     }
   }

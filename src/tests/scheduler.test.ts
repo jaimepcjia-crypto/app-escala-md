@@ -6,6 +6,7 @@ const weekStart = new Date("2026-06-01T00:00:00.000Z");
 
 function broker(partial: Partial<BrokerWithPlanningData> & { id: string; name: string; salesRank?: number; teamId?: string }): BrokerWithPlanningData {
   const salesRank = partial.salesRank ?? 1;
+  const salesAmountCents = partial.salesAmountCents ?? BigInt((10_000 - salesRank) * 100);
   return {
     id: partial.id,
     name: partial.name,
@@ -16,7 +17,7 @@ function broker(partial: Partial<BrokerWithPlanningData> & { id: string; name: s
     updatedAt: new Date(),
     team: { id: partial.teamId ?? "team-a", name: partial.teamId ?? "team-a" },
     salesRank,
-    salesAmountCents: BigInt((10_000 - salesRank) * 100),
+    salesAmountCents,
     autoHistoryTotal: partial.autoHistoryTotal ?? partial.historyTotal?.totalAssignments ?? 0,
     historyTotal: partial.historyTotal ?? {
       id: `history-${partial.id}`,
@@ -51,6 +52,23 @@ it("never assigns a broker unavailable at the real duty start hour", () => {
 
   expect(result.assignments[0].brokerId).toBe("b");
   expect(result.assignments[0].isViolation).toBe(false);
+});
+
+it("does not privilege sales ranking when every broker has the same sales amount", () => {
+  const topDuty = { ...duty, id: "top", name: "Sombreiros" };
+  const result = generateSchedule({
+    weekStart,
+    brokers: [
+      broker({ id: "r1", name: "Empatado carregado", salesRank: 1, salesAmountCents: BigInt(100), autoHistoryTotal: 30 }),
+      broker({ id: "r2", name: "Empatado leve", salesRank: 1, salesAmountCents: BigInt(100) })
+    ],
+    dutyTypes: [topDuty],
+    windows: [{ id: "w1", weekStart, dayOfWeek: "MONDAY", shift: "MORNING", quantity: 1, dutyTypeId: topDuty.id, importCellId: null, sourceText: null, sourceColorHex: null, confidence: 1 }],
+    unavailabilities: [],
+    priorityByLocalName: new Map([["Sombreiros", 1]])
+  });
+
+  expect(result.assignments[0].brokerId).toBe("r2");
 });
 
 it("allows a broker when the duty starts exactly after the unavailable range ends", () => {
@@ -156,4 +174,29 @@ it("moves the reservation down the ranking when a reserved broker is unavailable
   });
 
   expect(result.assignments[0].brokerId).toBe("r2");
+});
+
+it("gives the leader preference but includes every broker tied below inside the reserved group", () => {
+  const topDuty = { ...duty, id: "top", name: "Sombreiros" };
+  const secondPlaceAmount = BigInt(100);
+  const result = generateSchedule({
+    weekStart,
+    brokers: [
+      broker({ id: "r1", name: "Lider", salesRank: 1, salesAmountCents: BigInt(10_000) }),
+      broker({ id: "r2", name: "Segundo A", salesRank: 2, salesAmountCents: secondPlaceAmount }),
+      broker({ id: "r3", name: "Segundo B", salesRank: 2, salesAmountCents: secondPlaceAmount }),
+      broker({ id: "r4", name: "Segundo C", salesRank: 2, salesAmountCents: secondPlaceAmount })
+    ],
+    dutyTypes: [topDuty],
+    windows: [
+      { id: "w1", weekStart, dayOfWeek: "MONDAY", shift: "MORNING", quantity: 1, dutyTypeId: topDuty.id, importCellId: null, sourceText: null, sourceColorHex: null, confidence: 1 },
+      { id: "w2", weekStart, dayOfWeek: "TUESDAY", shift: "MORNING", quantity: 1, dutyTypeId: topDuty.id, importCellId: null, sourceText: null, sourceColorHex: null, confidence: 1 },
+      { id: "w3", weekStart, dayOfWeek: "WEDNESDAY", shift: "MORNING", quantity: 1, dutyTypeId: topDuty.id, importCellId: null, sourceText: null, sourceColorHex: null, confidence: 1 }
+    ],
+    unavailabilities: [],
+    priorityByLocalName: new Map([["Sombreiros", 1]])
+  });
+
+  expect(result.assignments[0].brokerId).toBe("r1");
+  expect(["r2", "r3", "r4"]).toContain(result.assignments[1].brokerId);
 });

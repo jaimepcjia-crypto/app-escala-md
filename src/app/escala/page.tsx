@@ -11,7 +11,7 @@ import { StatusPill } from "@/components/StatusPill";
 
 type PublicData = {
   weekStart: string;
-  brokers: Array<{ id: string; name: string; salesRank: number | null; team: { name: string } }>;
+  brokers: Array<{ id: string; name: string; salesRank: number | null; salesRankLabel?: string | null; team: { name: string } }>;
   schedule: null | {
     id: string;
     status: string;
@@ -122,7 +122,7 @@ export default function PublicSchedulePage() {
             .sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999))
             .map((broker) => (
               <div key={broker.id} className="ui-font flex items-center gap-3 rounded-md border border-graphite/15 bg-paper p-3 text-sm">
-                <span className="rounded bg-ink px-2 py-1 text-xs font-bold text-paper">{broker.salesRank}o</span>
+                <span className="rounded bg-ink px-2 py-1 text-xs font-bold text-paper">{broker.salesRankLabel ?? `${broker.salesRank}o`}</span>
                 <span className="font-bold">{broker.name}</span>
               </div>
             ))}

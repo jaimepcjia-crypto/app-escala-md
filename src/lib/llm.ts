@@ -173,9 +173,9 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       "Disponibilidade e permissao externa sao travas duras.",
       "A escala ja foi gerada pelo motor deterministico; a LLM deve auditar e sugerir melhorias, nao inventar regras.",
       "Cores/janelas roxas sao do gerente Ferreira; demais plantões importados sao externos e preservados.",
-      "Meritocracia usa ranking de vendas e reservas nos tres melhores plantoes.",
+      "Meritocracia usa faixas reais de vendas e reservas nos tres melhores plantoes.",
       "O gerente pode editar manualmente, mas deve ver impacto no balanceamento.",
-      "Se todos estiverem com venda padrao R$ 1,00, explique que o ranking e provisorio por desempate, nao diga que o ranking esta nulo.",
+      "Se todos estiverem com venda padrao R$ 1,00 ou empatados, explique que vendas nao favorecem nenhum corretor individualmente.",
       "Nao use nomes tecnicos de campos do sistema, como salesRank, assignmentType, null ou JSON."
     ],
     estatisticasCorretores: input.brokerStats,
@@ -195,7 +195,7 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       recommendations: string[];
     }>({
       system:
-        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. meritocracy deve explicar se a regra de vendas foi aplicada ou se o ranking esta provisoriamente empatado por vendas padrao. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. recommendations deve ter no maximo 3 acoes praticas, sem sugerir violar indisponibilidade. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts, recommendations.",
+        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. meritocracy deve explicar se a regra de vendas foi aplicada ou se houve empate real, caso em que vendas nao favorecem nenhum corretor individualmente. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. recommendations deve ter no maximo 3 acoes praticas, sem sugerir violar indisponibilidade. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts, recommendations.",
       user: JSON.stringify(payload),
       schema: {
         type: "OBJECT",

@@ -6,6 +6,9 @@ export type BrokerWithPlanningData = Broker & {
   historyTotal: HistoryTotal | null;
   salesRank?: number;
   salesAmountCents?: bigint;
+  salesTieSize?: number;
+  salesOrdinalStart?: number | null;
+  salesOrdinalEnd?: number | null;
   autoHistoryTotal?: number;
 };
 
@@ -109,6 +112,41 @@ function candidateValue(
   return rankBonus - balancePenalty - dutyPenalty - weekPenalty - focusPenalty + jitter;
 }
 
+function brokerSalesAmount(broker: BrokerWithPlanningData) {
+  return broker.salesAmountCents ?? BigInt(100);
+}
+
+function buildSalesGroups(brokers: BrokerWithPlanningData[]) {
+  const active = brokers.filter((broker) => broker.active);
+  const amounts = [...new Set(active.map((broker) => brokerSalesAmount(broker).toString()))]
+    .map(BigInt)
+    .sort((left, right) => (right > left ? 1 : right < left ? -1 : 0));
+  const groups: Array<{ amount: bigint; start: number; end: number; brokerIds: Set<string> }> = [];
+  let start = 1;
+  for (const amount of amounts) {
+    const brokerIds = new Set(active.filter((broker) => brokerSalesAmount(broker) === amount).map((broker) => broker.id));
+    const end = start + brokerIds.size - 1;
+    groups.push({ amount, start, end, brokerIds });
+    start = end + 1;
+  }
+  return groups;
+}
+
+function brokerIdsForOrdinalRange(groups: ReturnType<typeof buildSalesGroups>, start: number, end: number) {
+  const ids = new Set<string>();
+  for (const group of groups) {
+    if (group.start <= end && group.end >= start) {
+      for (const brokerId of group.brokerIds) ids.add(brokerId);
+    }
+  }
+  return ids;
+}
+
+function brokerIdsForOrdinal(groups: ReturnType<typeof buildSalesGroups>, ordinal: number) {
+  const group = groups.find((item) => item.start <= ordinal && item.end >= ordinal);
+  return new Set(group?.brokerIds ?? []);
+}
+
 function localNameForWindow(window: WeeklyWindow & { importedCell?: ImportedScheduleCell | null }, duty?: DutyType) {
   return window.importedCell?.localName || duty?.name || "PLANTAO";
 }
@@ -139,27 +177,6 @@ function selectCandidates(
       value: candidateValue(broker, duty, weekCounts.get(broker.id) ?? 0, seed, balanceMode, deprioritizeBrokerIds)
     }))
     .sort((left, right) => right.value - left.value);
-}
-
-function rankedCandidates(
-  brokers: BrokerWithPlanningData[],
-  duty: DutyType,
-  dayOfWeek: DayOfWeek,
-  startHour: number,
-  dateKey: string,
-  unavailableRanges: Map<string, Array<{ startHour: number; endHour: number }>>,
-  assignedAtTime: Set<string>,
-  deprioritizeBrokerIds: Set<string>
-) {
-  return brokers
-    .filter((broker) => isEligible(broker, duty))
-    .filter((broker) => !isUnavailableAtStart(broker.id, dateKey, startHour, unavailableRanges))
-    .filter((broker) => !assignedAtTime.has(assignmentKey(broker.id, dayOfWeek, startHour)))
-    .sort((left, right) => {
-      const leftPenalty = deprioritizeBrokerIds.has(left.id) ? 1000 : 0;
-      const rightPenalty = deprioritizeBrokerIds.has(right.id) ? 1000 : 0;
-      return (left.salesRank ?? 9999) + leftPenalty - ((right.salesRank ?? 9999) + rightPenalty) || left.name.localeCompare(right.name);
-    });
 }
 
 function bestExtraordinarySuggestions(
@@ -221,16 +238,22 @@ export function generateSchedule(input: EngineInput) {
   const topLocalNames = [...windowsByLocal.keys()].sort((left, right) => {
     return (input.priorityByLocalName?.get(left) ?? 999) - (input.priorityByLocalName?.get(right) ?? 999);
   });
-  const reservedRankBySlot = new Map<string, number>();
+  const salesGroups = buildSalesGroups(input.brokers);
+  const meritocracyActive = salesGroups.length > 1;
+  const reservedBrokerIdsBySlot = new Map<string, { allowed: Set<string>; preferred: Set<string> }>();
   topLocalNames.slice(0, 3).forEach((localName, localIndex) => {
+    if (!meritocracyActive) return;
     const windows = windowsByLocal.get(localName) ?? [];
     const total = windows.reduce((sum, window) => sum + window.quantity, 0);
     const reservedCount = Math.ceil(total * 0.4);
-    const rankStart = localIndex * 2 + 1;
+    const ordinalStart = localIndex * 2 + 1;
+    const ordinalEnd = ordinalStart + 1;
+    const allowed = brokerIdsForOrdinalRange(salesGroups, ordinalStart, ordinalEnd);
     let marked = 0;
     for (const window of windows) {
       for (let slot = 1; slot <= window.quantity && marked < reservedCount; slot += 1) {
-        reservedRankBySlot.set(`${window.id}:${slot}`, rankStart + (marked % 2));
+        const preferred = brokerIdsForOrdinal(salesGroups, ordinalStart + (marked % 2));
+        reservedBrokerIdsBySlot.set(`${window.id}:${slot}`, { allowed, preferred });
         marked += 1;
       }
       if (marked >= reservedCount) break;
@@ -252,7 +275,7 @@ export function generateSchedule(input: EngineInput) {
       const dayOffset = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].indexOf(dayOfWeek);
       date.setUTCDate(input.weekStart.getUTCDate() + Math.max(0, dayOffset));
       const dateKey = date.toISOString().slice(0, 10);
-      const preferredRank = reservedRankBySlot.get(`${window.id}:${slot}`) ?? null;
+      const reservedBrokerIds = reservedBrokerIdsBySlot.get(`${window.id}:${slot}`) ?? null;
 
       if (duty.isCalling && isWeekend(dayOfWeek) && window.quantity - slot + 1 >= 2) {
         const teams = new Map<string, BrokerWithPlanningData[]>();
@@ -294,13 +317,12 @@ export function generateSchedule(input: EngineInput) {
         }
       }
 
-      const ranked = rankedCandidates(input.brokers, duty, dayOfWeek, startHour, dateKey, unavailableRanges, assignedAtTime, deprioritizeBrokerIds);
-      const selectedBroker = preferredRank
-        ? ranked.find((broker) => (broker.salesRank ?? 9999) === preferredRank) ?? ranked.find((broker) => (broker.salesRank ?? 9999) > preferredRank)
-        : null;
-      const selected = selectedBroker
-        ? { broker: selectedBroker }
-        : selectCandidates(input.brokers, duty, dayOfWeek, startHour, dateKey, unavailableRanges, assignedAtTime, weekCounts, seed, balanceMode, deprioritizeBrokerIds)[0];
+      const candidates = selectCandidates(input.brokers, duty, dayOfWeek, startHour, dateKey, unavailableRanges, assignedAtTime, weekCounts, seed, balanceMode, deprioritizeBrokerIds);
+      const selected = reservedBrokerIds
+        ? candidates.find((candidate) => reservedBrokerIds.preferred.has(candidate.broker.id)) ??
+          candidates.find((candidate) => reservedBrokerIds.allowed.has(candidate.broker.id)) ??
+          candidates[0]
+        : candidates[0];
       if (selected) {
         assignments.push({
           brokerId: selected.broker.id,

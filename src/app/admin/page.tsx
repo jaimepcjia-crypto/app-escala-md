@@ -14,6 +14,10 @@ type BrokerSnapshot = {
   user?: { email: string } | null;
   salesAmountReais: string;
   salesRank: number | null;
+  salesRankLabel: string;
+  salesTieSize: number;
+  salesOrdinalStart: number | null;
+  salesOrdinalEnd: number | null;
   autoHistoryTotal: number;
   canExternalDuty: boolean;
   active: boolean;
@@ -67,7 +71,7 @@ function reservationSummary(items: Array<{ localName: string }>) {
   const first = items[0]?.localName ?? "-";
   const second = items[1]?.localName ?? "-";
   const third = items[2]?.localName ?? "-";
-  return `Reservas: 1o/2o em vendas recebem 40% de ${first}; 3o/4o recebem 40% de ${second}; 5o/6o recebem 40% de ${third}. Do quarto plantao em diante nao ha reserva.`;
+  return `Reservas: as faixas de vendas 1o/2o concorrem a 40% de ${first}; 3o/4o a 40% de ${second}; 5o/6o a 40% de ${third}. Empates entram juntos e nao sao desempate por nome.`;
 }
 
 export default function AdminPage() {
@@ -402,7 +406,7 @@ export default function AdminPage() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">Corretores e vendas</h2>
-                <p className="ui-font text-xs text-graphite">Mes de referencia: {monthLabel(snapshot?.salesMonthStart)}. Sem valor informado, o app usa R$ 1,00.</p>
+              <p className="ui-font text-xs text-graphite">Mes de referencia: {monthLabel(snapshot?.salesMonthStart)}. Sem valor informado, o app usa R$ 1,00. Valores iguais ficam empatados.</p>
               </div>
               <StatusPill tone="muted">{snapshot?.brokers.length ?? 0} ativos/cadastrados</StatusPill>
             </div>
@@ -508,7 +512,7 @@ function PriorityCard({ items, notice, onMove }: { items: Array<{ localName: str
   return (
     <div className="panel rounded-lg p-4">
       <h2 className="mb-2 text-xl font-bold">Prioridade dos plantoes</h2>
-      <p className="ui-font mb-3 text-sm text-graphite">Arraste os plantoes. O primeiro e o melhor; os tres primeiros ativam reservas meritocraticas.</p>
+      <p className="ui-font mb-3 text-sm text-graphite">Arraste os plantoes. O primeiro e o melhor; os tres primeiros ativam reservas por faixas de vendas. Empates entram juntos.</p>
       {notice ? (
         <div className="ui-font mb-3 rounded-md border border-signal/20 bg-signal/10 p-2 text-xs font-bold text-signal">
           {notice}
@@ -585,7 +589,7 @@ function BrokerRow({
         <input className="control w-full rounded-md px-1.5 py-1 text-[11px]" type="email" value={email} onChange={(event) => setEmail(event.target.value)} data-help="Edita o email usado como login deste corretor." />
       </td>
       <td className="break-words px-1.5 py-1.5 leading-snug">{broker.team.name}</td>
-      <td className="px-1.5 py-1.5 text-center font-bold">{broker.salesRank ? `${broker.salesRank}o` : "-"}</td>
+      <td className="px-1.5 py-1.5 text-center font-bold">{broker.salesRankLabel ?? "-"}</td>
       <td className="px-1.5 py-1.5">
         <div className="flex min-w-0 items-center gap-1">
           <span>R$</span>

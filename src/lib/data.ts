@@ -48,21 +48,56 @@ async function publishedHistoryCounts() {
   return counts;
 }
 
+function ordinalLabel(rank: number, tieSize: number) {
+  return tieSize > 1 ? `${rank}o empatado` : `${rank}o`;
+}
+
+export function salesRankInfoFromBrokers<T extends { id: string; name: string; team: { isFerreira: boolean }; active: boolean }>(
+  brokers: T[],
+  salesByBroker: Map<string, bigint>
+) {
+  const eligible = brokers.filter((broker) => broker.team.isFerreira && broker.active);
+  const amounts = [...new Set(eligible.map((broker) => (salesByBroker.get(broker.id) ?? BigInt(100)).toString()))]
+    .map(BigInt)
+    .sort((left, right) => (right > left ? 1 : right < left ? -1 : 0));
+  const amountToRank = new Map(amounts.map((amount, index) => [amount.toString(), index + 1]));
+  const groups = new Map<string, T[]>();
+  for (const broker of eligible) {
+    const amount = (salesByBroker.get(broker.id) ?? BigInt(100)).toString();
+    const rows = groups.get(amount) ?? [];
+    rows.push(broker);
+    groups.set(amount, rows);
+  }
+
+  let ordinalStart = 1;
+  const result = new Map<string, { rank: number; label: string; tieSize: number; ordinalStart: number; ordinalEnd: number }>();
+  for (const amount of amounts) {
+    const key = amount.toString();
+    const rows = groups.get(key) ?? [];
+    const tieSize = rows.length;
+    const rank = amountToRank.get(key) ?? 9999;
+    const ordinalEnd = ordinalStart + tieSize - 1;
+    for (const broker of rows) {
+      result.set(broker.id, {
+        rank,
+        label: ordinalLabel(rank, tieSize),
+        tieSize,
+        ordinalStart,
+        ordinalEnd
+      });
+    }
+    ordinalStart = ordinalEnd + 1;
+  }
+  return result;
+}
+
 export function rankingFromBrokers<T extends { id: string; name: string; team: { isFerreira: boolean }; active: boolean }>(
   brokers: T[],
   salesByBroker: Map<string, bigint>,
-  historyByBroker: Map<string, number>
+  _historyByBroker: Map<string, number>
 ) {
-  const ranked = brokers
-    .filter((broker) => broker.team.isFerreira && broker.active)
-    .sort((left, right) => {
-      const salesDiff = salesByBroker.get(right.id)! > salesByBroker.get(left.id)! ? 1 : salesByBroker.get(right.id)! < salesByBroker.get(left.id)! ? -1 : 0;
-      if (salesDiff !== 0) return salesDiff;
-      const historyDiff = (historyByBroker.get(left.id) ?? 0) - (historyByBroker.get(right.id) ?? 0);
-      if (historyDiff !== 0) return historyDiff;
-      return left.name.localeCompare(right.name);
-    });
-  return new Map(ranked.map((broker, index) => [broker.id, index + 1]));
+  const details = salesRankInfoFromBrokers(brokers, salesByBroker);
+  return new Map([...details.entries()].map(([brokerId, info]) => [brokerId, info.rank]));
 }
 
 function localNameForWindow(window: { importedCell?: { localName?: string | null } | null; dutyType: { name: string; priority: number } }) {
@@ -121,15 +156,20 @@ export async function getAdminSnapshot(weekStartInput?: string) {
 
   const salesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(100)]));
   for (const sale of salesRows) salesByBroker.set(sale.brokerId, sale.amountCents);
-  const rankByBroker = rankingFromBrokers(rawBrokers, salesByBroker, historyByBroker);
+  const rankByBroker = salesRankInfoFromBrokers(rawBrokers, salesByBroker);
   const brokers = rawBrokers
     .map((broker) => {
       const amountCents = salesByBroker.get(broker.id) ?? BigInt(100);
+      const rankInfo = rankByBroker.get(broker.id);
       return {
         ...broker,
         salesAmountCents: amountCents.toString(),
         salesAmountReais: centsToReais(amountCents),
-        salesRank: rankByBroker.get(broker.id) ?? null,
+        salesRank: rankInfo?.rank ?? null,
+        salesRankLabel: rankInfo?.label ?? "-",
+        salesTieSize: rankInfo?.tieSize ?? 0,
+        salesOrdinalStart: rankInfo?.ordinalStart ?? null,
+        salesOrdinalEnd: rankInfo?.ordinalEnd ?? null,
         autoHistoryTotal: historyByBroker.get(broker.id) ?? 0
       };
     })
@@ -180,15 +220,24 @@ export async function getPublishedSchedule(weekStartInput?: string, options: { f
     },
     orderBy: { publishedAt: "desc" }
   });
-  const [rawBrokers, salesRows, historyByBroker] = await Promise.all([
+  const [rawBrokers, salesRows] = await Promise.all([
     prisma.broker.findMany({ where: { active: true }, include: { team: true }, orderBy: { name: "asc" } }),
-    prisma.brokerMonthlySale.findMany({ where: { monthStart } }),
-    publishedHistoryCounts()
+    prisma.brokerMonthlySale.findMany({ where: { monthStart } })
   ]);
   const salesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(100)]));
   for (const sale of salesRows) salesByBroker.set(sale.brokerId, sale.amountCents);
-  const rankByBroker = rankingFromBrokers(rawBrokers, salesByBroker, historyByBroker);
-  const brokers = rawBrokers.map((broker) => ({ ...broker, salesRank: rankByBroker.get(broker.id) ?? null }));
+  const rankByBroker = salesRankInfoFromBrokers(rawBrokers, salesByBroker);
+  const brokers = rawBrokers.map((broker) => {
+    const rankInfo = rankByBroker.get(broker.id);
+    return {
+      ...broker,
+      salesRank: rankInfo?.rank ?? null,
+      salesRankLabel: rankInfo?.label ?? "-",
+      salesTieSize: rankInfo?.tieSize ?? 0,
+      salesOrdinalStart: rankInfo?.ordinalStart ?? null,
+      salesOrdinalEnd: rankInfo?.ordinalEnd ?? null
+    };
+  });
   return { weekStart: formatWeekStart(weekStart), salesMonthStart: formatWeekStart(monthStart), schedule, brokers };
 }
 
@@ -206,12 +255,16 @@ export async function listPlanningData(weekStart: Date) {
   ]);
   const salesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(100)]));
   for (const sale of salesRows) salesByBroker.set(sale.brokerId, sale.amountCents);
-  const rankByBroker = rankingFromBrokers(rawBrokers, salesByBroker, historyByBroker);
+  const rankByBroker = salesRankInfoFromBrokers(rawBrokers, salesByBroker);
   const brokers = rawBrokers
     .map((broker) => ({
       ...broker,
       salesAmountCents: salesByBroker.get(broker.id) ?? BigInt(100),
-      salesRank: rankByBroker.get(broker.id) ?? 9999,
+      salesRank: rankByBroker.get(broker.id)?.rank ?? 9999,
+      salesRankLabel: rankByBroker.get(broker.id)?.label ?? "-",
+      salesTieSize: rankByBroker.get(broker.id)?.tieSize ?? 0,
+      salesOrdinalStart: rankByBroker.get(broker.id)?.ordinalStart ?? null,
+      salesOrdinalEnd: rankByBroker.get(broker.id)?.ordinalEnd ?? null,
       autoHistoryTotal: historyByBroker.get(broker.id) ?? 0
     }))
     .sort((left, right) => left.salesRank - right.salesRank || left.name.localeCompare(right.name));
