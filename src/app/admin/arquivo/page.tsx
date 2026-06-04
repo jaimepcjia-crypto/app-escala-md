@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, CalendarSearch, Loader2, Upload } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { BrokersSalesPanel, type BrokerSnapshot } from "@/components/BrokersSalesPanel";
 import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
@@ -31,6 +32,8 @@ type ArchiveSchedule = {
 type ArchivePayload = {
   imports: ArchiveImport[];
   schedules: ArchiveSchedule[];
+  brokers: BrokerSnapshot[];
+  salesMonthStart: string;
 };
 
 function nextPlanningWeekStart() {
@@ -72,7 +75,7 @@ export default function AdminArchivePage() {
 
   async function load() {
     setBusy(true);
-    const response = await fetch("/api/admin/archive", { cache: "no-store" });
+    const response = await fetch(`/api/admin/archive?weekStart=${weekStart}`, { cache: "no-store" });
     if (response.status === 401) {
       window.location.href = "/login";
       return;
@@ -85,7 +88,73 @@ export default function AdminArchivePage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [weekStart]);
+
+  async function postAdmin(payload: Record<string, unknown>) {
+    const response = await fetch("/api/admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error ?? "Falha administrativa.");
+    return body;
+  }
+
+  async function updateBroker(broker: BrokerSnapshot, patch: Partial<BrokerSnapshot>) {
+    try {
+      await postAdmin({
+        action: "updateBroker",
+        id: broker.id,
+        name: patch.name ?? broker.name,
+        email: patch.user?.email ?? broker.user?.email,
+        canExternalDuty: patch.canExternalDuty ?? broker.canExternalDuty,
+        active: patch.active ?? broker.active
+      });
+      setNotice("Corretor atualizado.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao atualizar corretor.");
+    }
+  }
+
+  async function deleteBroker(broker: BrokerSnapshot) {
+    const confirmed = window.confirm(`Excluir ${broker.name}? O login dele sera removido e plantões antigos ficarao sem corretor vinculado.`);
+    if (!confirmed) return;
+    try {
+      await postAdmin({ action: "deleteBroker", id: broker.id });
+      setNotice(`${broker.name} excluido do cadastro.`);
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao excluir corretor.");
+    }
+  }
+
+  async function updateMonthlySale(broker: BrokerSnapshot, amountReais: string) {
+    try {
+      await postAdmin({
+        action: "updateMonthlySale",
+        brokerId: broker.id,
+        weekStart,
+        amountReais
+      });
+      setNotice("Venda mensal atualizada e ranking recalculado.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao atualizar venda mensal.");
+    }
+  }
+
+  async function resetBrokerPassword(broker: BrokerSnapshot) {
+    const newPassword = window.prompt(`Nova senha numerica para ${broker.name}`);
+    if (newPassword === null) return;
+    try {
+      await postAdmin({ action: "resetBrokerPassword", brokerId: broker.id, newPassword });
+      setNotice(`Senha de ${broker.name} redefinida.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao redefinir senha.");
+    }
+  }
 
   async function importSchedule() {
     if (!file) {
@@ -240,22 +309,33 @@ export default function AdminArchivePage() {
           </section>
         </aside>
 
-        <section className="panel rounded-lg p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Histórico exclusivo do gerente</p>
-              <h2 className="text-xl font-bold">{selectedSchedule ? `Semana ${formatDate(selectedSchedule.weekStart)}` : "Nenhuma escala selecionada"}</h2>
+        <div className="flex flex-col gap-5">
+          <BrokersSalesPanel
+            brokers={data?.brokers ?? []}
+            salesMonthStart={data?.salesMonthStart}
+            onSave={updateBroker}
+            onSaleSave={updateMonthlySale}
+            onDelete={deleteBroker}
+            onResetPassword={resetBrokerPassword}
+          />
+
+          <section className="panel rounded-lg p-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Histórico exclusivo do gerente</p>
+                <h2 className="text-xl font-bold">{selectedSchedule ? `Semana ${formatDate(selectedSchedule.weekStart)}` : "Nenhuma escala selecionada"}</h2>
+              </div>
+              {selectedSchedule ? <StatusPill tone="ok">publicada</StatusPill> : <StatusPill tone="warn">sem escala</StatusPill>}
             </div>
-            {selectedSchedule ? <StatusPill tone="ok">publicada</StatusPill> : <StatusPill tone="warn">sem escala</StatusPill>}
-          </div>
-          {selectedSchedule?.assignments.length ? (
-            <SpreadsheetScheduleGrid schedule={selectedSchedule} />
-          ) : (
-            <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
-              Selecione uma escala publicada para visualizar o histórico.
-            </div>
-          )}
-        </section>
+            {selectedSchedule?.assignments.length ? (
+              <SpreadsheetScheduleGrid schedule={selectedSchedule} />
+            ) : (
+              <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
+                Selecione uma escala publicada para visualizar o histórico.
+              </div>
+            )}
+          </section>
+        </div>
       </section>
     </AppShell>
   );

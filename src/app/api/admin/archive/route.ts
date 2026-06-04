@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireManager } from "@/lib/auth";
+import { getAdminSnapshot } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData } from "@/lib/seed";
 
@@ -11,6 +12,8 @@ export async function GET(request: NextRequest) {
   await ensureSeedData();
   const auth = await requireManager(request);
   if ("error" in auth) return auth.error;
+  const weekStart = request.nextUrl.searchParams.get("weekStart") ?? undefined;
+  const snapshot = await getAdminSnapshot(weekStart);
 
   const [imports, schedules] = await Promise.all([
     prisma.scheduleImport.findMany({
@@ -36,6 +39,8 @@ export async function GET(request: NextRequest) {
   ]);
 
   return NextResponse.json({
+    brokers: snapshot.brokers,
+    salesMonthStart: snapshot.salesMonthStart,
     imports: imports.map((item) => ({
       id: item.id,
       weekStart: dateOnly(item.weekStart),
