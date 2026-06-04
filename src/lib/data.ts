@@ -18,6 +18,11 @@ function centsToReais(cents: bigint | number | null | undefined) {
   return `${sign}${reais.toString()}.${centavos.toString().padStart(2, "0")}`;
 }
 
+function centsToBRL(cents: bigint | number | null | undefined) {
+  const value = Number(cents ?? 100) / 100;
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+}
+
 function reaisToCents(value: unknown) {
   const raw = String(value ?? "1")
     .replace(/[^\d,.-]/g, "")
@@ -29,6 +34,21 @@ function reaisToCents(value: unknown) {
 }
 
 export { reaisToCents };
+
+function currentSaoPauloSalesPeriod(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? now.getUTCFullYear());
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? now.getUTCMonth() + 1);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const nextYearStart = new Date(Date.UTC(year + 1, 0, 1));
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(monthStart);
+  return { year, monthStart, yearStart, nextYearStart, monthLabel };
+}
 
 async function publishedHistoryCounts() {
   const assignments = await prisma.scheduleAssignment.findMany({
@@ -206,7 +226,7 @@ export async function getAdminSnapshot(weekStartInput?: string) {
 export async function getPublishedSchedule(weekStartInput?: string, options: { ferreiraOnly?: boolean } = {}) {
   await ensureSeedData();
   const weekStart = normalizeWeekStart(weekStartInput);
-  const monthStart = salesMonthStartForWeek(weekStart);
+  const salesPeriod = currentSaoPauloSalesPeriod();
   const schedule = await prisma.schedule.findFirst({
     where: { weekStart, status: "PUBLISHED" },
     include: {
@@ -222,23 +242,56 @@ export async function getPublishedSchedule(weekStartInput?: string, options: { f
   });
   const [rawBrokers, salesRows] = await Promise.all([
     prisma.broker.findMany({ where: { active: true }, include: { team: true }, orderBy: { name: "asc" } }),
-    prisma.brokerMonthlySale.findMany({ where: { monthStart } })
+    prisma.brokerMonthlySale.findMany({
+      where: {
+        monthStart: {
+          gte: salesPeriod.yearStart,
+          lt: salesPeriod.nextYearStart
+        }
+      }
+    })
   ]);
   const salesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(100)]));
-  for (const sale of salesRows) salesByBroker.set(sale.brokerId, sale.amountCents);
+  const yearSalesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(0)]));
+  const brokersWithCurrentMonthSale = new Set<string>();
+  for (const sale of salesRows) {
+    yearSalesByBroker.set(sale.brokerId, (yearSalesByBroker.get(sale.brokerId) ?? BigInt(0)) + sale.amountCents);
+    if (sale.monthStart.getTime() === salesPeriod.monthStart.getTime()) {
+      salesByBroker.set(sale.brokerId, sale.amountCents);
+      brokersWithCurrentMonthSale.add(sale.brokerId);
+    }
+  }
+  for (const broker of rawBrokers) {
+    if (!brokersWithCurrentMonthSale.has(broker.id)) {
+      yearSalesByBroker.set(broker.id, (yearSalesByBroker.get(broker.id) ?? BigInt(0)) + BigInt(100));
+    }
+  }
   const rankByBroker = salesRankInfoFromBrokers(rawBrokers, salesByBroker);
   const brokers = rawBrokers.map((broker) => {
     const rankInfo = rankByBroker.get(broker.id);
+    const monthAmountCents = salesByBroker.get(broker.id) ?? BigInt(100);
+    const yearAmountCents = yearSalesByBroker.get(broker.id) ?? BigInt(0);
     return {
       ...broker,
       salesRank: rankInfo?.rank ?? null,
       salesRankLabel: rankInfo?.label ?? "-",
       salesTieSize: rankInfo?.tieSize ?? 0,
       salesOrdinalStart: rankInfo?.ordinalStart ?? null,
-      salesOrdinalEnd: rankInfo?.ordinalEnd ?? null
+      salesOrdinalEnd: rankInfo?.ordinalEnd ?? null,
+      currentMonthSalesReais: centsToBRL(monthAmountCents),
+      currentYearSalesReais: centsToBRL(yearAmountCents),
+      currentMonthSalesCents: monthAmountCents.toString(),
+      currentYearSalesCents: yearAmountCents.toString()
     };
   });
-  return { weekStart: formatWeekStart(weekStart), salesMonthStart: formatWeekStart(monthStart), schedule, brokers };
+  return {
+    weekStart: formatWeekStart(weekStart),
+    salesMonthStart: formatWeekStart(salesPeriod.monthStart),
+    salesMonthLabel: salesPeriod.monthLabel,
+    salesYear: salesPeriod.year,
+    schedule,
+    brokers
+  };
 }
 
 export async function listPlanningData(weekStart: Date) {
