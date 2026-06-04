@@ -15,6 +15,19 @@ const dutyTypes = [
   { name: "Ligacao", priority: 7, isCalling: true }
 ];
 
+const initialBrokers = [
+  { name: "Ana", email: "corretor847629@teste.local", password: "508652" },
+  { name: "Bruno", email: "corretor880809@teste.local", password: "970451" },
+  { name: "Carla", email: "corretor441004@teste.local", password: "582095" },
+  { name: "Diego", email: "corretor659233@teste.local", password: "624103" },
+  { name: "Elisa", email: "corretor546128@teste.local", password: "619969" },
+  { name: "Fabio", email: "corretor592786@teste.local", password: "402519" },
+  { name: "Giulia", email: "corretor317543@teste.local", password: "130863" },
+  { name: "Hugo", email: "corretor768325@teste.local", password: "980258" },
+  { name: "Ines", email: "corretor324841@teste.local", password: "637548" },
+  { name: "Joao", email: "corretor609751@teste.local", password: "596303" }
+];
+
 export function managerInitialEmail() {
   return normalizeEmail(process.env.MANAGER_EMAIL || "ferreira@escala.local");
 }
@@ -50,4 +63,55 @@ export async function ensureSeedData() {
       role: "MANAGER"
     }
   });
+
+  const ferreiraTeam = await prisma.team.findUniqueOrThrow({ where: { name: "Equipe Ferreira" } });
+
+  for (const brokerSeed of initialBrokers) {
+    const email = normalizeEmail(brokerSeed.email);
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: { broker: true }
+    });
+
+    if (existingUser?.broker) {
+      await prisma.broker.update({
+        where: { id: existingUser.broker.id },
+        data: {
+          teamId: ferreiraTeam.id,
+          canExternalDuty: true,
+          active: true
+        }
+      });
+      continue;
+    }
+
+    const broker = await prisma.broker.upsert({
+      where: { name: brokerSeed.name },
+      update: {
+        teamId: ferreiraTeam.id,
+        canExternalDuty: true,
+        active: true
+      },
+      create: {
+        name: brokerSeed.name,
+        teamId: ferreiraTeam.id,
+        canExternalDuty: true,
+        active: true
+      }
+    });
+
+    await prisma.user.upsert({
+      where: { email },
+      update: {
+        role: "BROKER",
+        brokerId: broker.id
+      },
+      create: {
+        email,
+        passwordHash: hashPassword(brokerSeed.password),
+        role: "BROKER",
+        brokerId: broker.id
+      }
+    });
+  }
 }
