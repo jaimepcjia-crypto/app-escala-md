@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  // URL de acesso pessoal (.../login?email=...) pré-preenche o e-mail; a senha é digitada.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("email");
+    if (fromUrl) setEmail(fromUrl);
+  }, []);
 
   async function login() {
     setError("");

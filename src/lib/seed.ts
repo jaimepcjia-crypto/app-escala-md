@@ -54,12 +54,18 @@ export async function ensureSeedData() {
     });
   }
 
+  const existingManager = await prisma.user.findUnique({ where: { email: managerInitialEmail() } });
   await prisma.user.upsert({
     where: { email: managerInitialEmail() },
-    update: { role: "MANAGER", brokerId: null },
+    update: {
+      role: "MANAGER",
+      brokerId: null,
+      ...(existingManager && !existingManager.passwordPlain ? { passwordPlain: managerInitialPassword() } : {})
+    },
     create: {
       email: managerInitialEmail(),
       passwordHash: hashPassword(managerInitialPassword()),
+      passwordPlain: managerInitialPassword(),
       role: "MANAGER"
     }
   });
@@ -82,6 +88,10 @@ export async function ensureSeedData() {
           active: true
         }
       });
+      // backfill da senha em texto p/ exibir na aba DADOS (só se ainda não tiver)
+      if (!existingUser.passwordPlain) {
+        await prisma.user.update({ where: { id: existingUser.id }, data: { passwordPlain: brokerSeed.password } });
+      }
       continue;
     }
 
@@ -104,11 +114,13 @@ export async function ensureSeedData() {
       where: { email },
       update: {
         role: "BROKER",
-        brokerId: broker.id
+        brokerId: broker.id,
+        ...(existingUser && !existingUser.passwordPlain ? { passwordPlain: brokerSeed.password } : {})
       },
       create: {
         email,
         passwordHash: hashPassword(brokerSeed.password),
+        passwordPlain: brokerSeed.password,
         role: "BROKER",
         brokerId: broker.id
       }

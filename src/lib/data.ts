@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ensureSeedData } from "@/lib/seed";
+import { ensureSeedData, managerInitialEmail } from "@/lib/seed";
 import { formatWeekStart, normalizeWeekStart, type DayOfWeek, type Shift } from "@/lib/constants";
 import { addDays, dateForWeekDay, dateOnly, dayOfWeekForDate, generationWindowStatus, parseDateOnly } from "@/lib/deadlines";
 
@@ -205,6 +205,7 @@ export async function getAdminSnapshot(weekStartInput?: string) {
   return {
     weekStart: formatWeekStart(weekStart),
     salesMonthStart: formatWeekStart(monthStart),
+    managerEmail: managerInitialEmail(),
     teams,
     brokers,
     dutyTypes,

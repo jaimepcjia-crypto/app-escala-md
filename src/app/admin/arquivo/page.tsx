@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Archive, Download, Loader2, Upload } from "lucide-react";
+import { Archive, Copy, Download, Loader2, Upload } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { BrokersSalesPanel, type BrokerSnapshot } from "@/components/BrokersSalesPanel";
+import { BrokersSalesPanel, accessUrlFor, type BrokerSnapshot, type BrokerSavePatch } from "@/components/BrokersSalesPanel";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -33,6 +33,7 @@ type ArchivePayload = {
   schedules: ArchiveSchedule[];
   brokers: BrokerSnapshot[];
   salesMonthStart: string;
+  managerEmail: string;
 };
 
 function nextPlanningWeekStart() {
@@ -102,13 +103,14 @@ export default function AdminArchivePage() {
     return body;
   }
 
-  async function updateBroker(broker: BrokerSnapshot, patch: Partial<BrokerSnapshot>) {
+  async function updateBroker(broker: BrokerSnapshot, patch: BrokerSavePatch) {
     try {
       await postAdmin({
         action: "updateBroker",
         id: broker.id,
         name: patch.name ?? broker.name,
         email: patch.user?.email ?? broker.user?.email,
+        password: patch.password ?? "",
         canExternalDuty: patch.canExternalDuty ?? broker.canExternalDuty,
         active: patch.active ?? broker.active
       });
@@ -146,14 +148,13 @@ export default function AdminArchivePage() {
     }
   }
 
-  async function resetBrokerPassword(broker: BrokerSnapshot) {
-    const newPassword = window.prompt(`Nova senha numerica para ${broker.name}`);
-    if (newPassword === null) return;
+  async function copyManagerLink() {
+    if (!data?.managerEmail) return;
     try {
-      await postAdmin({ action: "resetBrokerPassword", brokerId: broker.id, newPassword });
-      setNotice(`Senha de ${broker.name} redefinida.`);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Falha ao redefinir senha.");
+      await navigator.clipboard.writeText(accessUrlFor(data.managerEmail));
+      setNotice("Link de acesso do gerente copiado.");
+    } catch {
+      setNotice("Nao foi possivel copiar (navegador bloqueou). Copie manualmente o link mostrado.");
     }
   }
 
@@ -288,13 +289,26 @@ export default function AdminArchivePage() {
         </aside>
 
         <div className="flex flex-col gap-5">
+          {data?.managerEmail ? (
+            <section className="panel rounded-lg p-4">
+              <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Acesso do gerente</p>
+              <h2 className="text-lg font-bold">Link pessoal do gerente</h2>
+              <p className="ui-font mt-1 text-xs text-graphite">Abre o login com o e-mail do gerente preenchido. A senha continua sendo digitada.</p>
+              <div className="ui-font mt-2 flex flex-wrap items-center gap-2">
+                <input className="control min-w-0 flex-1 rounded-md px-2 py-1 text-[11px]" readOnly value={accessUrlFor(data.managerEmail)} onFocus={(event) => event.target.select()} aria-label="Link de acesso do gerente" />
+                <button className="inline-flex items-center gap-1 rounded-md bg-ink px-3 py-1.5 text-xs font-bold text-paper" onClick={copyManagerLink} data-help="Copia o link de acesso do gerente.">
+                  <Copy size={13} /> Copiar
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           <BrokersSalesPanel
             brokers={data?.brokers ?? []}
             salesMonthStart={data?.salesMonthStart}
             onSave={updateBroker}
             onSaleSave={updateMonthlySale}
             onDelete={deleteBroker}
-            onResetPassword={resetBrokerPassword}
           />
 
           <section className="panel rounded-lg p-4">

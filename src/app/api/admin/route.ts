@@ -20,8 +20,10 @@ export async function POST(request: NextRequest) {
     const brokerId = String(body.id ?? "");
     const name = String(body.name ?? "").trim();
     const email = normalizeEmail(String(body.email ?? ""));
+    const password = String(body.password ?? "");
     if (!name) return NextResponse.json({ error: "Informe o nome do corretor." }, { status: 400 });
     if (!isValidEmail(email)) return NextResponse.json({ error: "Informe um email valido para o corretor." }, { status: 400 });
+    if (password && !isValidNumericPassword(password)) return NextResponse.json({ error: numericPasswordError() }, { status: 400 });
     const existing = await prisma.broker.findFirst({ where: { name, id: { not: brokerId } } });
     if (existing) return NextResponse.json({ error: "Ja existe outro corretor com este nome." }, { status: 409 });
     const existingEmail = await prisma.user.findFirst({ where: { email, brokerId: { not: brokerId } } });
@@ -37,7 +39,8 @@ export async function POST(request: NextRequest) {
       });
       await tx.user.updateMany({
         where: { brokerId },
-        data: { email }
+        // senha só muda se vier preenchida (numérica); grava hash + texto p/ exibição
+        data: { email, ...(password ? { passwordHash: hashPassword(password), passwordPlain: password } : {}) }
       });
       return updated;
     });
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
     await prisma.user.update({
       where: { id: manager.id },
-      data: { passwordHash: hashPassword(newPassword) }
+      data: { passwordHash: hashPassword(newPassword), passwordPlain: newPassword }
     });
     return NextResponse.json({ ok: true });
   }
@@ -108,7 +111,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Login do corretor nao encontrado." }, { status: 404 });
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: hashPassword(newPassword) }
+      data: { passwordHash: hashPassword(newPassword), passwordPlain: newPassword }
     });
     return NextResponse.json({ ok: true });
   }
@@ -152,6 +155,7 @@ export async function POST(request: NextRequest) {
         data: {
           email,
           passwordHash: hashPassword(initialPassword),
+          passwordPlain: initialPassword,
           role: "BROKER",
           brokerId: created.id
         }
