@@ -27,9 +27,9 @@ type LlmReviewResult = {
 };
 
 export function getLlmConfig() {
-  const apiKey = process.env.GEMINI_API_KEY || "";
-  const baseUrl = (process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const apiKey = process.env.OPENAI_API_KEY || "";
+  const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   return { apiKey, baseUrl, model };
 }
 
@@ -54,30 +54,24 @@ export async function requestLlmJson<T>(input: {
 }): Promise<{ model: string; rawJson: string; parsed: T }> {
   const { apiKey, baseUrl, model } = getLlmConfig();
   if (!apiKey) {
-    throw Object.assign(new Error("IA nao configurada. Defina GEMINI_API_KEY para ativar a IA."), { status: 503 });
+    throw Object.assign(new Error("IA nao configurada. Defina OPENAI_API_KEY para ativar a IA."), { status: 503 });
   }
 
-  const modelPath = model.startsWith("models/") ? model : `models/${model}`;
-  const response = await fetch(`${baseUrl}/${modelPath}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: input.system }]
-      },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: input.user }]
-        }
-      ],
-      generationConfig: {
-        temperature: input.temperature ?? 0.1,
-        responseMimeType: "application/json",
-        ...(input.schema ? { responseSchema: input.schema } : {})
-      }
+      model,
+      temperature: input.temperature ?? 0.1,
+      // JSON mode: garante resposta em JSON valido (os prompts ja descrevem as chaves).
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: input.system },
+        { role: "user", content: input.user }
+      ]
     })
   });
 
@@ -86,12 +80,7 @@ export async function requestLlmJson<T>(input: {
     throw Object.assign(new Error(body?.error?.message || "Falha ao consultar a IA."), { status: 502, body });
   }
 
-  const rawJson = String(
-    (body?.candidates?.[0]?.content?.parts ?? [])
-      .map((part: { text?: string }) => part.text ?? "")
-      .filter(Boolean)
-      .join("")
-  );
+  const rawJson = String(body?.choices?.[0]?.message?.content ?? "");
   return { model, rawJson, parsed: extractJson(rawJson) as T };
 }
 
@@ -157,7 +146,7 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
     return {
       model: null,
       status: "DISABLED",
-      summary: "IA nao configurada. Defina GEMINI_API_KEY para ativar a analise da escala.",
+      summary: "IA nao configurada. Defina OPENAI_API_KEY para ativar a analise da escala.",
       meritocracy: null,
       balance: null,
       conflicts: null,
