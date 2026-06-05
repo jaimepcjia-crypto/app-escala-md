@@ -29,7 +29,7 @@ type LlmReviewResult = {
 export function getLlmConfig() {
   const apiKey = process.env.GEMINI_API_KEY || "";
   const baseUrl = (process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
-  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
   return { apiKey, baseUrl, model };
 }
 
