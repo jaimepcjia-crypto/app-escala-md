@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowDown, ArrowUp, GripVertical, KeyRound, Loader2, Plus, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, KeyRound, Loader2, Plus, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { normalizeWeekStart } from "@/lib/constants";
 import { StatusPill } from "@/components/StatusPill";
 import type { BrokerSnapshot } from "@/components/BrokersSalesPanel";
@@ -65,8 +64,6 @@ export default function AdminPage() {
   const [managerPassword, setManagerPassword] = useState({ currentPassword: "", newPassword: "" });
   const [priorityNotice, setPriorityNotice] = useState("");
   const priorityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const schedule = useMemo(() => snapshot?.schedules.find((item) => item.status === "PUBLISHED") ?? snapshot?.schedules[0], [snapshot]);
 
   async function load() {
     setBusy(true);
@@ -170,26 +167,9 @@ export default function AdminPage() {
     }
   }
 
-  async function adjustAssignment(assignmentId: string, brokerId: string) {
-    try {
-      const response = await fetch("/api/escala/ajustar", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignmentId, brokerId })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Falha ao ajustar.");
-      setNotice(data.assignment.balanceAlert || (data.assignment.isViolation ? "Ajuste salvo com alerta de regra." : "Ajuste salvo."));
-      await load();
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Falha ao ajustar.");
-    }
-  }
-
   return (
     <AppShell active="admin">
-      <section className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <aside className="flex flex-col gap-5">
+      <div className="mx-auto flex max-w-xl flex-col gap-5">
           <div className="panel rounded-lg p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
@@ -323,67 +303,8 @@ export default function AdminPage() {
               Abrir arquivo
             </Link>
           </div>
-        </aside>
-
-        <div className="flex flex-col gap-5">
-          <section className="panel rounded-lg p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-xl font-bold">Escala final</h2>
-              {schedule ? <StatusPill tone={schedule.status === "PUBLISHED" ? "ok" : "muted"}>{schedule.status === "PUBLISHED" ? "publicada" : "rascunho"}</StatusPill> : <StatusPill tone="warn">sem escala</StatusPill>}
-            </div>
-            {schedule?.assignments?.length ? (
-              <>
-                {schedule.aiReview ? <AiReviewCard review={schedule.aiReview} /> : null}
-                <SpreadsheetScheduleGrid schedule={schedule} brokers={snapshot?.brokers.filter((broker) => broker.team.isFerreira) ?? []} editable onChange={adjustAssignment} />
-              </>
-            ) : (
-              <div className="ui-font flex items-center gap-2 rounded-md border border-signal/20 bg-signal/10 p-3 text-sm text-signal">
-                <AlertTriangle size={18} />
-                Importe o arquivo semanal, confirme as janelas roxas e clique em GERAR ESCALA.
-              </div>
-            )}
-          </section>
-        </div>
-      </section>
+      </div>
     </AppShell>
-  );
-}
-
-function AiReviewCard({ review }: { review: any }) {
-  const recommendations = (() => {
-    try {
-      return JSON.parse(review.recommendations || "[]") as string[];
-    } catch {
-      return [];
-    }
-  })();
-  return (
-    <div className="ui-font mb-4 rounded-md border border-graphite/15 bg-paper p-3 text-sm">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <strong>Resultado da publicação</strong>
-        <StatusPill tone={review.status === "ERROR" ? "warn" : review.status === "DISABLED" ? "muted" : "ok"}>
-          {review.status === "OK" ? "analisada" : review.status === "ERROR" ? "atenção" : "sem IA"}
-        </StatusPill>
-      </div>
-      <div className="rounded-md border border-graphite/15 bg-linen/50 p-2">
-        <div className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-graphite">O que aconteceu</div>
-        <p>{review.summary}</p>
-      </div>
-      {review.conflicts ? (
-        <div className="mt-2 rounded-md border border-signal/20 bg-signal/10 p-2">
-          <div className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-signal">Atenção</div>
-          <p>{review.conflicts}</p>
-        </div>
-      ) : null}
-      {review.meritocracy ? <p className="mt-2"><strong>Critério de vendas:</strong> {review.meritocracy}</p> : null}
-      {review.balance ? <p className="mt-2"><strong>Equilíbrio:</strong> {review.balance}</p> : null}
-      {recommendations.length ? (
-        <ul className="mt-2 list-disc pl-5">
-          {recommendations.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      ) : null}
-      {review.error ? <p className="mt-2 text-signal">{review.error}</p> : null}
-    </div>
   );
 }
 
