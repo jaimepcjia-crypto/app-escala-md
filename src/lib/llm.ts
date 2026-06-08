@@ -21,7 +21,6 @@ type LlmReviewResult = {
   meritocracy?: string | null;
   balance?: string | null;
   conflicts?: string | null;
-  recommendations: string[];
   rawJson?: string | null;
   error?: string | null;
 };
@@ -150,7 +149,6 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       meritocracy: null,
       balance: null,
       conflicts: null,
-      recommendations: [],
       rawJson: null,
       error: null
     };
@@ -181,10 +179,9 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       meritocracy: string;
       balance: string;
       conflicts: string;
-      recommendations: string[];
     }>({
       system:
-        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. meritocracy deve explicar se a regra de vendas foi aplicada ou se houve empate real, caso em que vendas nao favorecem nenhum corretor individualmente. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. recommendations deve ter no maximo 3 acoes praticas, sem sugerir violar indisponibilidade. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts, recommendations.",
+        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. meritocracy deve explicar se a regra de vendas foi aplicada ou se houve empate real, caso em que vendas nao favorecem nenhum corretor individualmente. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts.",
       user: JSON.stringify(payload),
       schema: {
         type: "OBJECT",
@@ -192,10 +189,9 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
           summary: { type: "STRING" },
           meritocracy: { type: "STRING" },
           balance: { type: "STRING" },
-          conflicts: { type: "STRING" },
-          recommendations: { type: "ARRAY", items: { type: "STRING" } }
+          conflicts: { type: "STRING" }
         },
-        required: ["summary", "meritocracy", "balance", "conflicts", "recommendations"]
+        required: ["summary", "meritocracy", "balance", "conflicts"]
       }
     });
     return {
@@ -205,7 +201,6 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       meritocracy: result.parsed.meritocracy,
       balance: result.parsed.balance,
       conflicts: result.parsed.conflicts,
-      recommendations: Array.isArray(result.parsed.recommendations) ? result.parsed.recommendations : [],
       rawJson: result.rawJson,
       error: null
     };
@@ -214,7 +209,6 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       model,
       status: "ERROR",
       summary: "A escala foi publicada, mas a IA nao conseguiu analisar esta geracao.",
-      recommendations: [],
       rawJson: null,
       error: error instanceof Error ? error.message : "Falha desconhecida na IA."
     };

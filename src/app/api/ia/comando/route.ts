@@ -50,13 +50,11 @@ async function interpretCommand(command: string) {
 
 function reviewText(review: any) {
   if (!review) return "Ainda nao existe analise da IA para a escala publicada desta semana.";
-  const recommendations = JSON.parse(review.recommendations || "[]") as string[];
   return [
     review.summary,
     review.meritocracy ? `Meritocracia: ${review.meritocracy}` : null,
     review.balance ? `Equilibrio: ${review.balance}` : null,
     review.conflicts ? `Conflitos: ${review.conflicts}` : null,
-    recommendations.length ? `Sugestoes: ${recommendations.join(" | ")}` : null,
     review.error ? `Erro da IA: ${review.error}` : null
   ].filter(Boolean).join("\n");
 }

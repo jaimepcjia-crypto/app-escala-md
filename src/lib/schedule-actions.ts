@@ -132,7 +132,6 @@ export async function generateAndPublishSchedule(
       meritocracy: aiReview.meritocracy,
       balance: aiReview.balance,
       conflicts: aiReview.conflicts,
-      recommendations: JSON.stringify(aiReview.recommendations),
       rawJson: aiReview.rawJson,
       error: aiReview.error
     }

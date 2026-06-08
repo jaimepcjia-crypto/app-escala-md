@@ -4,13 +4,6 @@ import { StatusPill } from "@/components/StatusPill";
 
 // Card "Resultado da publicação" — análise da IA sobre a escala publicada.
 export function AiReviewCard({ review }: { review: any }) {
-  const recommendations = (() => {
-    try {
-      return JSON.parse(review.recommendations || "[]") as string[];
-    } catch {
-      return [];
-    }
-  })();
   return (
     <div className="ui-font mb-4 rounded-md border border-graphite/15 bg-paper p-3 text-sm">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -31,11 +24,6 @@ export function AiReviewCard({ review }: { review: any }) {
       ) : null}
       {review.meritocracy ? <p className="mt-2"><strong>Critério de vendas:</strong> {review.meritocracy}</p> : null}
       {review.balance ? <p className="mt-2"><strong>Equilíbrio:</strong> {review.balance}</p> : null}
-      {recommendations.length ? (
-        <ul className="mt-2 list-disc pl-5">
-          {recommendations.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      ) : null}
       {review.error ? <p className="mt-2 text-signal">{review.error}</p> : null}
     </div>
   );
