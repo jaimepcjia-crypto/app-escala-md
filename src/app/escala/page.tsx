@@ -86,44 +86,32 @@ export default function SalesRankingPage() {
   }, [me, isManager, weekStart]);
 
   const schedule = data?.schedule ?? null;
+  const rankedBrokers = [...(data?.brokers ?? [])]
+    .filter((broker) => broker.salesRank)
+    .sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999));
 
   return (
     <AppShell active="escala">
       <div className="flex flex-col gap-5">
-        {/* Ranking de vendas (topo) */}
-        <section className="panel rounded-lg p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="panel rounded-2xl p-4">
+          <div className="grid gap-4 lg:grid-cols-[240px_1fr] lg:items-center">
             <div>
-              <h2 className="text-xl font-bold">Ranking de vendas</h2>
+              <p className="eyebrow">Ranking de vendas</p>
+              <h2 className="mt-1 text-xl font-semibold">Destaques do mês</h2>
               <p className="ui-font mt-1 text-xs text-graphite">
-                Ano {data?.salesYear ?? new Date().getFullYear()} e mes atual {data?.salesMonthLabel ?? ""}.
+                {data?.salesMonthLabel ?? ""} · valores em R$
               </p>
             </div>
-            <StatusPill tone="muted">valores em R$</StatusPill>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {rankedBrokers.slice(0, 3).map((broker) => <RankingLine key={broker.id} broker={broker} />)}
+            </div>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {data?.brokers
-              .filter((broker) => broker.salesRank)
-              .sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999))
-              .map((broker) => (
-                <div key={broker.id} className="ui-font rounded-md border border-graphite/15 bg-paper p-3 text-sm">
-                  <div className="mb-3 flex items-center gap-3">
-                    <span className="rounded bg-ink px-2 py-1 text-xs font-bold text-paper">{broker.salesRankLabel ?? `${broker.salesRank}o`}</span>
-                    <span className="font-bold">{broker.name}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded border border-graphite/10 bg-linen/70 p-2">
-                      <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-graphite">Ano {data?.salesYear ?? ""}</span>
-                      <strong className="text-sm text-ink">{broker.currentYearSalesReais ?? "R$ 0,00"}</strong>
-                    </div>
-                    <div className="rounded border border-graphite/10 bg-linen/70 p-2">
-                      <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-graphite">Mes atual</span>
-                      <strong className="text-sm text-ink">{broker.currentMonthSalesReais ?? "R$ 1,00"}</strong>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
+          <details className="mt-3 border-t border-graphite/10 pt-3">
+            <summary className="ui-font cursor-pointer text-xs font-bold text-signal">Ver ranking completo</summary>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              {rankedBrokers.map((broker) => <RankingLine key={broker.id} broker={broker} />)}
+            </div>
+          </details>
         </section>
 
         <section className="grid gap-4">
@@ -235,5 +223,15 @@ export default function SalesRankingPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function RankingLine({ broker }: { broker: PublicData["brokers"][number] }) {
+  return (
+    <div className="ui-font flex items-center gap-3 rounded-xl border border-graphite/10 bg-paper/70 p-3 text-xs">
+      <span className="rounded-lg bg-ink px-2 py-1 font-bold text-paper">{broker.salesRankLabel ?? `${broker.salesRank}o`}</span>
+      <span className="min-w-0 flex-1 truncate font-bold">{broker.name}</span>
+      <strong>{broker.currentMonthSalesReais ?? "R$ 1,00"}</strong>
+    </div>
   );
 }

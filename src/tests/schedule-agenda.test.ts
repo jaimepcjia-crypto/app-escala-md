@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { agendaStats, assignmentName, buildWeeklyAgenda, type AgendaAssignment } from "@/lib/schedule-agenda";
+import { agendaStats, assignmentName, buildScheduleGrid, buildWeeklyAgenda, type AgendaAssignment } from "@/lib/schedule-agenda";
 
 function assignment(patch: Partial<AgendaAssignment> & Pick<AgendaAssignment, "id">): AgendaAssignment {
   return {
@@ -49,4 +49,19 @@ it("reports operational totals and alerts", () => {
   ]);
 
   expect(stats).toEqual({ total: 3, ferreira: 2, prefilled: 1, alerts: 1 });
+});
+
+it("groups the modern grid by local, day and time without duplicating assignments", () => {
+  const items = [
+    assignment({ id: "ana", dayOfWeek: "MONDAY", importedCell: { id: "a", localName: "SEDE", timeLabel: "8h-12h" } }),
+    assignment({ id: "bruno", dayOfWeek: "MONDAY", importedCell: { id: "b", localName: "SEDE", timeLabel: "8h-12h" } }),
+    assignment({ id: "carla", dayOfWeek: "TUESDAY", importedCell: { id: "c", localName: "QUIOSQUE", timeLabel: "12h-16h" } })
+  ];
+  const grid = buildScheduleGrid(items);
+  const ids = grid.flatMap((local) => local.days).flatMap((day) => day.times).flatMap((time) => time.assignments.map((item) => item.id));
+
+  expect(grid.map((local) => local.local)).toEqual(["SEDE", "QUIOSQUE"]);
+  expect(grid[0].days[0].times[0].assignments.map((item) => item.id)).toEqual(["ana", "bruno"]);
+  expect(ids).toHaveLength(items.length);
+  expect(new Set(ids).size).toBe(items.length);
 });

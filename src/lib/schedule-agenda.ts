@@ -73,6 +73,26 @@ export function groupAssignmentsByLocal(assignments: AgendaAssignment[]) {
   return [...groups.entries()].map(([local, items]) => ({ local, assignments: items }));
 }
 
+export function groupAssignmentsByTime(assignments: AgendaAssignment[]) {
+  const groups = new Map<string, AgendaAssignment[]>();
+  for (const assignment of sortAgendaAssignments(assignments)) {
+    const time = assignmentTime(assignment);
+    groups.set(time, [...(groups.get(time) ?? []), assignment]);
+  }
+  return [...groups.entries()].map(([time, items]) => ({ time, assignments: items }));
+}
+
+export function buildScheduleGrid(assignments: AgendaAssignment[]) {
+  return groupAssignmentsByLocal(assignments).map((localGroup) => ({
+    local: localGroup.local,
+    days: DAYS.map((day) => ({
+      ...day,
+      assignments: sortAgendaAssignments(localGroup.assignments.filter((assignment) => assignment.dayOfWeek === day.key)),
+      times: groupAssignmentsByTime(localGroup.assignments.filter((assignment) => assignment.dayOfWeek === day.key))
+    }))
+  }));
+}
+
 export function buildWeeklyAgenda(assignments: AgendaAssignment[]) {
   return DAYS.map((day) => {
     const dayAssignments = sortAgendaAssignments(assignments.filter((assignment) => assignment.dayOfWeek === day.key));
