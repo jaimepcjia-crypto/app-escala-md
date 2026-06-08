@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Archive, BarChart3, CalendarDays, ClipboardList, LogOut, Shield } from "lucide-react";
+import { BarChart3, CalendarDays, ClipboardList, LogOut, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-export function AppShell({ children, active }: { children: React.ReactNode; active: "admin" | "arquivo" | "disponibilidade" | "escala" }) {
+export function AppShell({ children, active }: { children: React.ReactNode; active: "admin" | "disponibilidade" | "escala" }) {
   const [role, setRole] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -16,8 +16,7 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   }, []);
 
   const managerLinks = [
-    { href: "/admin", label: "PUBLICAR ESCALA", key: "admin", icon: Shield, help: "Abre o painel administrativo do Ferreira para gerar e publicar a escala." },
-    { href: "/admin/arquivo", label: "DADOS", key: "arquivo", icon: Archive, help: "Abre importacoes e escalas publicadas anteriores do gerente." },
+    { href: "/admin", label: "PUBLICAR ESCALA", key: "admin", icon: Shield, help: "Painel do gerente: importar, gerar e publicar a escala, e gerir corretores." },
     { href: "/disponibilidade", label: "INDISPONIBILIDADES", key: "disponibilidade", icon: ClipboardList, help: "Abre a visualizacao mensal de indisponibilidades dos corretores." },
     { href: "/escala", label: "ESCALA/RANKING", key: "escala", icon: BarChart3, help: "Mostra o ranking de vendas e a escala publicada da semana." }
   ] as const;
@@ -28,7 +27,7 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   const links = useMemo(() => {
     if (role === "BROKER") return brokerLinks;
     if (role === "MANAGER") return managerLinks;
-    return active === "admin" || active === "arquivo" ? managerLinks : brokerLinks;
+    return active === "admin" ? managerLinks : brokerLinks;
   }, [active, role]);
 
   async function logout() {
