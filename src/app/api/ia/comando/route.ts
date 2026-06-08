@@ -6,6 +6,7 @@ import { getAdminSnapshot } from "@/lib/data";
 import { requestLlmJson } from "@/lib/llm";
 import { generateAndPublishSchedule } from "@/lib/schedule-actions";
 import { analyzeScheduleChangeRequest, decideScheduleChangeRequest, invalidatePendingChangeRequests, type RequestedScheduleChange } from "@/lib/ai-schedule-changes";
+import { answerBrokerOperationalQuestion } from "@/lib/ai-operational-questions";
 
 async function interpretCommand(command: string) {
   const result = await requestLlmJson<{ action: string; focusBrokerName: string | null; shortReason: string; changes?: RequestedScheduleChange[] }>({
@@ -102,6 +103,17 @@ export async function POST(request: NextRequest) {
     }
     if (!command) return NextResponse.json({ error: "Digite uma ordem para a IA." }, { status: 400 });
 
+    const operationalBrokers = await prisma.broker.findMany({ include: { team: true }, orderBy: { name: "asc" } });
+    const operationalAnswer = answerBrokerOperationalQuestion(command, operationalBrokers);
+    if (operationalAnswer) {
+      const activeFerreiraBrokers = operationalBrokers.filter((broker) => broker.active && broker.team.isFerreira).length;
+      return NextResponse.json({
+        intent: { action: "ANSWER_OPERATIONAL_QUESTION", focusBrokerName: null, shortReason: "Pergunta respondida com os dados atuais do cadastro.", changes: [] },
+        message: operationalAnswer,
+        data: { activeFerreiraBrokers }
+      });
+    }
+
     const intent = await interpretCommand(command);
 
     if (intent.action === "CHANGE_ASSIGNMENTS") {
@@ -192,7 +204,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       intent,
       message:
-        "IA: posso verificar o NAO PODE, gerar/publicar escala, explicar a justica da escala, gerar novamente com mais equilibrio ou revisar um corretor possivelmente beneficiado."
+        "IA: não consegui identificar o que você deseja. Informe o pedido com mais detalhes. Exemplos: “quantos corretores estão ativos?”, “verifique o NÃO PODE” ou “troque Ana por Bruno na segunda às 8h”."
     });
   } catch (error) {
     const status = typeof error === "object" && error && "status" in error ? Number((error as { status: number }).status) : 500;
