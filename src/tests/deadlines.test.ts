@@ -14,7 +14,7 @@ it("opens the next-week workflow only on Saturday and Sunday in Sao Paulo", () =
   const friday = new Date("2026-06-05T15:00:00.000Z");
   const saturday = new Date("2026-06-06T15:00:00.000Z");
   const sunday = new Date("2026-06-07T23:00:00.000Z");
-  expect(weeklyWorkflowStatus(friday)).toMatchObject({ isOpen: false, weekStart: "2026-06-08", daysUntilOpen: 1 });
+  expect(weeklyWorkflowStatus(friday)).toMatchObject({ isOpen: false, currentWeekStart: "2026-06-01", weekStart: "2026-06-08", daysUntilOpen: 1 });
   expect(weeklyWorkflowStatus(saturday)).toMatchObject({ isOpen: true, weekStart: "2026-06-08" });
   expect(weeklyWorkflowStatus(sunday)).toMatchObject({ isOpen: true, weekStart: "2026-06-08" });
 });

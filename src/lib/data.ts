@@ -229,6 +229,8 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
     workflow: {
       isOpen: workflow.isOpen,
       daysUntilOpen: workflow.daysUntilOpen,
+      currentWeekStart: workflow.currentWeekStart,
+      currentWeekEnd: workflow.currentWeekEnd,
       weekStart: workflow.weekStart,
       weekEnd: workflow.weekEnd,
       opensOn: workflow.opensOn,

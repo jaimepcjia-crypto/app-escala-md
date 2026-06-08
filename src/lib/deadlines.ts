@@ -111,6 +111,8 @@ export function generationWindowStatus(weekStartInput: string | Date, now = new 
 
 export function weeklyWorkflowStatus(now = new Date()) {
   const today = currentSaoPauloDate(now);
+  const currentWeekStartDate = currentSaoPauloWeekStart(now);
+  const currentWeekEndDate = addDays(currentWeekStartDate, 6);
   const weekStartDate = nextSaoPauloWeekStart(now);
   const weekEndDate = addDays(weekStartDate, 6);
   const opensOnDate = addDays(weekStartDate, -2);
@@ -120,9 +122,13 @@ export function weeklyWorkflowStatus(now = new Date()) {
   return {
     isOpen,
     daysUntilOpen,
+    currentWeekStartDate,
+    currentWeekEndDate,
     weekStartDate,
     weekEndDate,
     opensOnDate,
+    currentWeekStart: dateOnly(currentWeekStartDate),
+    currentWeekEnd: dateOnly(currentWeekEndDate),
     weekStart: dateOnly(weekStartDate),
     weekEnd: dateOnly(weekEndDate),
     opensOn: dateOnly(opensOnDate),

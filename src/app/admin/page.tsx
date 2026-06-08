@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { BrokersSalesPanel, accessUrlFor, type BrokerSnapshot, type BrokerSavePatch } from "@/components/BrokersSalesPanel";
 import { StatusPill } from "@/components/StatusPill";
 
-type Workflow = { isOpen: boolean; daysUntilOpen: number; weekStart: string; weekEnd: string; opensOn: string; closesOn: string };
+type Workflow = { isOpen: boolean; daysUntilOpen: number; currentWeekStart: string; currentWeekEnd: string; weekStart: string; weekEnd: string; opensOn: string; closesOn: string };
 type Snapshot = {
   weekStart: string;
   salesMonthStart: string;
@@ -205,6 +205,7 @@ export default function AdminPage() {
   const importsForWeek = archive?.imports.filter((item) => item.weekStart === workflow?.weekStart) ?? [];
   const currentImport = importsForWeek.find((item) => item.status === "CONFIRMED") ?? null;
   const published = snapshot?.schedules.some((item) => item.status === "PUBLISHED") ?? false;
+  const currentSchedulePublished = archive?.schedules.some((item) => item.weekStart === workflow?.currentWeekStart && item.status === "PUBLISHED") ?? false;
 
   return (
     <AppShell active="admin">
@@ -225,10 +226,11 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
-          <div className="grid border-t border-graphite/10 bg-white/45 sm:grid-cols-3">
+          <div className="grid border-t border-graphite/10 bg-white/45 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Escala em vigor" value={currentSchedulePublished ? "Publicada" : "Não publicada"} ok={currentSchedulePublished} />
             <Metric label="Indisponibilidades" value={`${snapshot?.readiness.confirmed ?? 0}/${snapshot?.readiness.totalFerreiraBrokers ?? 0}`} ok={Boolean(snapshot?.readiness.allConfirmed)} />
-            <Metric label="Arquivo semanal" value={currentImport ? "Validado" : "Pendente"} ok={Boolean(currentImport)} />
-            <Metric label="Publicação" value={published ? "Publicada" : "Aguardando"} ok={published} />
+            <Metric label="Arquivo da próxima escala" value={currentImport ? "Validado" : "Ainda não enviado"} ok={Boolean(currentImport)} />
+            <Metric label="Próxima escala" value={published ? "Publicada" : "Ainda não publicada"} ok={published} />
           </div>
         </section>
 
