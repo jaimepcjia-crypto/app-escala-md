@@ -1,4 +1,5 @@
 .codex/
+.claude/
 .next/
 .next-local/
 node_modules/
