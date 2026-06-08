@@ -169,8 +169,8 @@ export default function AdminPage() {
 
   return (
     <AppShell active="admin">
-      <div className="mx-auto flex max-w-xl flex-col gap-5">
-          <div className="panel rounded-lg p-4">
+      <div className="mx-auto max-w-6xl gap-5 md:columns-2 xl:columns-3">
+          <div className="panel mb-5 break-inside-avoid rounded-lg p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Controle</p>
@@ -255,7 +255,7 @@ export default function AdminPage() {
             {notice ? <p className="ui-font mt-3 rounded-md border border-graphite/15 bg-paper p-2 text-sm">{notice}</p> : null}
           </div>
 
-          <div className="panel rounded-lg p-4">
+          <div className="panel mb-5 break-inside-avoid rounded-lg p-4">
             <h2 className="mb-3 text-xl font-bold">Novo corretor</h2>
             <div className="grid gap-2">
               <input className="control rounded-md px-3 py-2" placeholder="Nome" value={newBroker.name} onChange={(event) => setNewBroker({ ...newBroker, name: event.target.value })} data-help="Informe o nome do novo corretor." />
@@ -276,7 +276,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="panel rounded-lg p-4">
+          <div className="panel mb-5 break-inside-avoid rounded-lg p-4">
             <h2 className="mb-3 text-xl font-bold">Minha senha</h2>
             <div className="grid gap-2">
               <input className="control rounded-md px-3 py-2" type="password" inputMode="numeric" placeholder="Senha atual" value={managerPassword.currentPassword} onChange={(event) => setManagerPassword({ ...managerPassword, currentPassword: event.target.value })} data-help="Informe sua senha atual de gerente." />
@@ -294,7 +294,7 @@ export default function AdminPage() {
             onMove={movePriority}
           />
 
-          <div className="panel rounded-lg p-4">
+          <div className="panel mb-5 break-inside-avoid rounded-lg p-4">
             <h2 className="mb-2 text-xl font-bold">Arquivos e historico</h2>
             <p className="ui-font mb-3 text-sm text-graphite">
               Importacoes de XLSX e escalas publicadas anteriores ficam em uma area separada, restrita ao gerente.
@@ -312,7 +312,7 @@ function PriorityCard({ items, notice, onMove }: { items: Array<{ localName: str
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   return (
-    <div className="panel rounded-lg p-4">
+    <div className="panel mb-5 break-inside-avoid rounded-lg p-4">
       <h2 className="mb-2 text-xl font-bold">Prioridade dos plantoes</h2>
       <p className="ui-font mb-3 text-sm text-graphite">Arraste os plantoes. O primeiro e o melhor; os tres primeiros ativam reservas por faixas de vendas. Empates entram juntos.</p>
       {notice ? (
