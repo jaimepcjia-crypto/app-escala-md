@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, Clock3, Copy, Download, FileSpreadsheet, GripVertical, KeyRound, Loader2, Plus, RefreshCw, Trash2, UploadCloud, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, Clock3, Copy, Download, FileSpreadsheet, GripVertical, KeyRound, Loader2, LockKeyhole, Plus, RefreshCw, Trash2, UploadCloud, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { BrokersSalesPanel, accessUrlFor, type BrokerSnapshot, type BrokerSavePatch } from "@/components/BrokersSalesPanel";
 import { StatusPill } from "@/components/StatusPill";
@@ -266,12 +266,17 @@ export default function AdminPage() {
                 </label>
               )}
             </div>
-            <PriorityCard items={snapshot?.plantaoPriorities ?? []} notice={priorityNotice} onMove={movePriority} />
+            <PriorityCard items={snapshot?.plantaoPriorities ?? []} notice={priorityNotice} onMove={movePriority} readOnly={false} />
             <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} ask={askIa} />
           </section>
         )}
 
-        {!workflow?.isOpen ? <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} ask={askIa} /> : null}
+        {!workflow?.isOpen ? (
+          <section className="grid gap-4 xl:grid-cols-2">
+            <PriorityCard items={snapshot?.plantaoPriorities ?? []} notice={priorityNotice} onMove={movePriority} readOnly />
+            <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} ask={askIa} />
+          </section>
+        ) : null}
         {notice ? <div className="ui-font rounded-xl border border-sand/40 bg-sand/15 p-3 text-sm">{notice}</div> : null}
 
         <div className="grid gap-3">
@@ -309,7 +314,17 @@ function AiCard({ command, setCommand, answer, busy, pending, ask }: { command: 
   return <div className="panel rounded-2xl p-4"><StepTitle number="03" title="Assistente IA" icon={RefreshCw} /><textarea className="control mt-4 min-h-24 w-full resize-y rounded-xl px-3 py-2 text-sm" value={command} onChange={(e) => setCommand(e.target.value)} placeholder="Ex: publique a próxima escala ou troque Ana por Bruno na escala atual" /><button className="action-primary mt-2 w-full" onClick={() => void ask()} disabled={busy}>{busy ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Enviar para IA</button>{answer ? <pre className="ui-font mt-3 whitespace-pre-wrap rounded-xl bg-linen/60 p-3 text-xs">{answer}</pre> : null}{pending ? <div className="mt-2 grid grid-cols-2 gap-2"><button className="action-primary" onClick={() => void ask("Confirme", "CONFIRM")}>Confirmar</button><button className="action-secondary" onClick={() => void ask("Cancele", "CANCEL")}>Cancelar</button></div> : null}</div>;
 }
 
-function PriorityCard({ items, notice, onMove }: { items: Array<{ localName: string; position: number }>; notice: string; onMove: (fromIndex: number, toIndex: number) => void }) {
+function PriorityCard({ items, notice, onMove, readOnly }: { items: Array<{ localName: string; position: number }>; notice: string; onMove: (fromIndex: number, toIndex: number) => void; readOnly: boolean }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  return <div className="panel rounded-2xl p-4"><StepTitle number="02" title="Melhores plantões" icon={Users} /><p className="ui-font mt-2 text-xs text-graphite">Arraste para orientar a distribuição. A ordem fica como padrão para as próximas semanas.</p>{notice ? <p className="ui-font mt-2 rounded-xl bg-sand/15 p-2 text-xs">{notice}</p> : null}<div className="mt-3 grid max-h-[360px] gap-2 overflow-auto pr-1">{items.length ? items.map((item, index) => <div key={item.localName} draggable onDragStart={() => setDragIndex(index)} onDragOver={(e) => e.preventDefault()} onDrop={() => { if (dragIndex !== null && dragIndex !== index) onMove(dragIndex, index); setDragIndex(null); }} className="ui-font flex items-center gap-2 rounded-xl border border-graphite/10 bg-white/60 p-2 text-xs font-bold"><GripVertical size={14} className="text-sand" /><span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-paper">{index + 1}</span><span className="min-w-0 flex-1 truncate">{item.localName}</span><button disabled={index === 0} onClick={() => onMove(index, index - 1)}><ArrowUp size={13} /></button><button disabled={index === items.length - 1} onClick={() => onMove(index, index + 1)}><ArrowDown size={13} /></button></div>) : <div className="ui-font rounded-xl border border-dashed border-sand p-4 text-center text-xs text-graphite">A lista aparece automaticamente após validar o XLSX.</div>}</div></div>;
+  return <div className={`panel rounded-2xl p-4 transition ${readOnly ? "border-graphite/10 bg-linen/55" : ""}`}>
+    <div className="flex items-start justify-between gap-3">
+      <StepTitle number="02" title="Melhores plantões" icon={Users} />
+      {readOnly ? <span className="ui-font inline-flex shrink-0 items-center gap-1.5 rounded-full border border-graphite/15 bg-white/55 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-graphite"><LockKeyhole size={11} /> Somente leitura</span> : null}
+    </div>
+    <p className="ui-font mt-2 text-xs text-graphite">{readOnly ? "Esta é a ordem atualmente salva. A edição reabre no sábado." : "Arraste para orientar a distribuição. A ordem fica como padrão para as próximas semanas."}</p>
+    {notice ? <p className="ui-font mt-2 rounded-xl bg-sand/15 p-2 text-xs">{notice}</p> : null}
+    <div className={`mt-3 grid max-h-[360px] gap-2 overflow-auto pr-1 ${readOnly ? "opacity-65 grayscale-[20%]" : ""}`}>
+      {items.length ? items.map((item, index) => <div key={item.localName} draggable={!readOnly} onDragStart={() => { if (!readOnly) setDragIndex(index); }} onDragOver={(e) => { if (!readOnly) e.preventDefault(); }} onDrop={() => { if (!readOnly && dragIndex !== null && dragIndex !== index) onMove(dragIndex, index); setDragIndex(null); }} aria-disabled={readOnly} className={`ui-font flex items-center gap-2 rounded-xl border border-graphite/10 bg-white/60 p-2 text-xs font-bold ${readOnly ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing"}`}><GripVertical size={14} className={readOnly ? "text-graphite/30" : "text-sand"} /><span className="grid h-6 w-6 place-items-center rounded-full bg-ink text-paper">{index + 1}</span><span className="min-w-0 flex-1 truncate">{item.localName}</span><button aria-label={`Subir ${item.localName}`} disabled={readOnly || index === 0} onClick={() => onMove(index, index - 1)} className="disabled:cursor-not-allowed disabled:opacity-25"><ArrowUp size={13} /></button><button aria-label={`Descer ${item.localName}`} disabled={readOnly || index === items.length - 1} onClick={() => onMove(index, index + 1)} className="disabled:cursor-not-allowed disabled:opacity-25"><ArrowDown size={13} /></button></div>) : <div className="ui-font rounded-xl border border-dashed border-sand p-4 text-center text-xs text-graphite">A lista aparece automaticamente após validar o XLSX.</div>}
+    </div>
+  </div>;
 }

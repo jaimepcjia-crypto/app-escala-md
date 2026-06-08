@@ -155,7 +155,7 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
   const aiWeekStart = defaultAiScheduleWeek();
   const monthStart = salesMonthStartForWeek(weekStart);
 
-  const [teams, rawBrokers, dutyTypes, windows, schedules, imports, confirmations, salesRows, priorityRows, historyByBroker, pendingChangeRequest] = await Promise.all([
+  const [teams, rawBrokers, dutyTypes, windows, schedules, imports, latestConfirmedImport, confirmations, salesRows, priorityRows, historyByBroker, pendingChangeRequest] = await Promise.all([
     prisma.team.findMany({ orderBy: { name: "asc" } }),
     prisma.broker.findMany({ include: { team: true, historyTotal: true, user: true }, orderBy: { name: "asc" } }),
     prisma.dutyType.findMany({ orderBy: { priority: "asc" } }),
@@ -170,6 +170,7 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
       orderBy: { createdAt: "desc" }
     }),
     prisma.scheduleImport.findMany({ where: { weekStart }, include: { cells: { orderBy: [{ rowIndex: "asc" }, { colIndex: "asc" }] } }, orderBy: { createdAt: "desc" } }),
+    prisma.scheduleImport.findFirst({ where: { status: "CONFIRMED" }, include: { cells: { orderBy: [{ rowIndex: "asc" }, { colIndex: "asc" }] } }, orderBy: [{ weekStart: "desc" }, { createdAt: "desc" }] }),
     prisma.unavailabilityConfirmation.findMany({ where: { weekStart }, include: { broker: true } }),
     prisma.brokerMonthlySale.findMany({ where: { monthStart } }),
     prisma.dutyPriority.findMany(),
@@ -201,9 +202,15 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
   const confirmedBrokerIds = new Set(confirmations.map((item) => item.brokerId));
   const confirmedImport = imports.find((item) => item.status === "CONFIRMED") ?? imports[0] ?? null;
   const importedLocalNames = confirmedImport?.cells.map((cell) => cell.localName ?? "").filter(Boolean) ?? [];
+  const rememberedLocalNames = [
+    ...priorityRows.sort((left, right) => left.position - right.position).map((row) => row.localName),
+    ...(latestConfirmedImport?.cells.map((cell) => cell.localName ?? "").filter(Boolean) ?? [])
+  ];
   const plantaoPriorities = importedLocalNames.length
     ? buildPlantaoPrioritiesFromNames(importedLocalNames, priorityRows)
-    : buildPlantaoPriorities(windows, priorityRows);
+    : rememberedLocalNames.length
+      ? buildPlantaoPrioritiesFromNames(rememberedLocalNames, priorityRows)
+      : buildPlantaoPriorities(windows, priorityRows);
 
   return {
     weekStart: formatWeekStart(weekStart),
