@@ -15,6 +15,18 @@ describe("travas absolutas de mudancas pedidas pela IA", () => {
     expect(reasons).toEqual(["Ana: corretor marcou indisponibilidade nesse horario."]);
   });
 
+  it("prioriza a indisponibilidade quando existem varias travas", () => {
+    const reasons = hardConstraintReasons({
+      brokerName: "Ana",
+      active: false,
+      requiresExternal: true,
+      canExternalDuty: false,
+      unavailable: true,
+      simultaneousCount: 2
+    });
+    expect(reasons[0]).toContain("indisponibilidade");
+  });
+
   it("bloqueia corretor inativo, externo sem autorizacao e choque de horario", () => {
     const reasons = hardConstraintReasons({
       brokerName: "Bruno",

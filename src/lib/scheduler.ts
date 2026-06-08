@@ -192,14 +192,11 @@ function bestExtraordinarySuggestions(
 ) {
   return brokers
     .filter((broker) => isEligible(broker, duty))
-    .map((broker) => ({
-      broker,
-      unavailable: isUnavailableAtStart(broker.id, dateKey, startHour, unavailableRanges),
-      value: candidateValue(broker, duty, 0, seed, balanceMode, deprioritizeBrokerIds)
-    }))
-    .sort((left, right) => Number(left.unavailable) - Number(right.unavailable) || right.value - left.value)
+    .filter((broker) => !isUnavailableAtStart(broker.id, dateKey, startHour, unavailableRanges))
+    .map((broker) => ({ broker, value: candidateValue(broker, duty, 0, seed, balanceMode, deprioritizeBrokerIds) }))
+    .sort((left, right) => right.value - left.value)
     .slice(0, 3)
-    .map((item) => `${item.broker.name}${item.unavailable ? " (indisponivel, convocacao)" : ""}`);
+    .map((item) => item.broker.name);
 }
 
 export function generateSchedule(input: EngineInput) {

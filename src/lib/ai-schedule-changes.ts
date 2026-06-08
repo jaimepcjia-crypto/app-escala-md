@@ -34,9 +34,9 @@ export function hardConstraintReasons(input: {
   simultaneousCount: number;
 }) {
   const reasons: string[] = [];
+  if (input.unavailable) reasons.push(`${input.brokerName}: corretor marcou indisponibilidade nesse horario.`);
   if (!input.active) reasons.push(`${input.brokerName}: corretor inativo.`);
   if (input.requiresExternal && !input.canExternalDuty) reasons.push(`${input.brokerName}: corretor sem autorizacao para plantao externo.`);
-  if (input.unavailable) reasons.push(`${input.brokerName}: corretor marcou indisponibilidade nesse horario.`);
   if (input.simultaneousCount > 1) reasons.push(`${input.brokerName}: corretor ficaria em dois plantoes no mesmo horario.`);
   return reasons;
 }
@@ -226,7 +226,6 @@ async function validateResolvedChanges(
     );
     if (unavailable) {
       hasUnavailability = true;
-      hardBlocks.push(`${formatChange(change)}: corretor marcou indisponibilidade nesse horario.`);
     }
     const simultaneous = finalRows.filter((row) =>
       row.brokerId === change.newBrokerId &&

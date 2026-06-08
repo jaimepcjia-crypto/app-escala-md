@@ -8,6 +8,7 @@ export const APP_KNOWLEDGE = [
   "Somente o próprio corretor pode inserir ou alterar sua indisponibilidade, chamada NÃO PODE. O gerente apenas consulta.",
   "Indisponibilidades podem ser editadas entre hoje e os próximos 12 meses, exceto em semanas com escala já publicada.",
   "A indisponibilidade é uma trava absoluta: nem o gerente nem a IA podem colocar o corretor naquele horário. O corretor precisa alterar o NÃO PODE e o gerente deve fazer um novo pedido.",
+  "A IA conduz o motor. Depois da confirmação do gerente, o motor atende às decisões da IA mesmo quando contrariam critérios flexíveis de distribuição, mas jamais ignora uma indisponibilidade registrada.",
   "Também são travas absolutas: corretor inativo, plantão externo sem autorização e dois plantões no mesmo horário.",
   "A escala não pode ser editada diretamente. O gerente solicita alterações à IA; toda proposta válida exige confirmação antes da execução.",
   "A IA analisa critérios de distribuição antes de propor uma alteração. O gerente pode confirmar uma mudança que contrarie critérios flexíveis, mas o app registra avisos visíveis. Travas absolutas nunca podem ser ultrapassadas.",

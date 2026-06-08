@@ -54,6 +54,19 @@ it("never assigns a broker unavailable at the real duty start hour", () => {
   expect(result.assignments[0].isViolation).toBe(false);
 });
 
+it("never suggests an unavailable broker when no duty can be covered", () => {
+  const result = generateSchedule({
+    weekStart,
+    brokers: [broker({ id: "a", name: "Indisponivel", salesRank: 1 })],
+    dutyTypes: [duty],
+    windows: [{ id: "w1", weekStart, dayOfWeek: "MONDAY", shift: "MORNING", startHour: 8, quantity: 1, dutyTypeId: duty.id, importCellId: null, sourceText: null, sourceColorHex: null, confidence: 1 }],
+    unavailabilities: [{ id: "u1", date: weekStart, weekStart, dayOfWeek: "MONDAY", shift: "TIME_RANGE", startHour: 8, endHour: 12, brokerId: "a", reason: null }]
+  });
+
+  expect(result.assignments[0].brokerId).toBeNull();
+  expect(result.conflicts[0].suggestions).toEqual([]);
+});
+
 it("does not privilege sales ranking when every broker has the same sales amount", () => {
   const topDuty = { ...duty, id: "top", name: "Sombreiros" };
   const result = generateSchedule({
