@@ -1,29 +1,33 @@
 import { expect, it } from "vitest";
-import { generationWindowStatus, unavailableDateStatus } from "@/lib/deadlines";
+import { defaultAiScheduleWeek, generationWindowStatus, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 
-it("blocks past dates and the current in-force week", () => {
+it("allows dates from today through the next 12 months", () => {
   const now = new Date("2026-06-03T15:00:00.000Z");
 
   expect(unavailableDateStatus("2026-06-02", now).status).toBe("past");
-  expect(unavailableDateStatus("2026-06-05", now).status).toBe("locked");
-  expect(unavailableDateStatus("2026-06-08", now).status).toBe("editable");
+  expect(unavailableDateStatus("2026-06-03", now).status).toBe("editable");
+  expect(unavailableDateStatus("2027-06-03", now).status).toBe("editable");
+  expect(unavailableDateStatus("2027-06-04", now).status).toBe("locked");
 });
 
-it("blocks the next week after Sunday 18h in Sao Paulo", () => {
-  const beforeCutoff = new Date("2026-06-07T20:59:00.000Z");
-  const afterCutoff = new Date("2026-06-07T21:00:00.000Z");
-
-  expect(unavailableDateStatus("2026-06-08", beforeCutoff).status).toBe("editable");
-  expect(unavailableDateStatus("2026-06-08", afterCutoff).status).toBe("locked");
-  expect(unavailableDateStatus("2026-06-15", afterCutoff).status).toBe("editable");
+it("opens the next-week workflow only on Saturday and Sunday in Sao Paulo", () => {
+  const friday = new Date("2026-06-05T15:00:00.000Z");
+  const saturday = new Date("2026-06-06T15:00:00.000Z");
+  const sunday = new Date("2026-06-07T23:00:00.000Z");
+  expect(weeklyWorkflowStatus(friday)).toMatchObject({ isOpen: false, weekStart: "2026-06-08", daysUntilOpen: 1 });
+  expect(weeklyWorkflowStatus(saturday)).toMatchObject({ isOpen: true, weekStart: "2026-06-08" });
+  expect(weeklyWorkflowStatus(sunday)).toMatchObject({ isOpen: true, weekStart: "2026-06-08" });
 });
 
-it("temporarily allows generation at any time", () => {
-  const beforeWindow = new Date("2026-06-07T21:00:00.000Z");
-  const openWindow = new Date("2026-06-07T21:01:00.000Z");
-  const wrongWeek = new Date("2026-06-07T21:30:00.000Z");
+it("allows generation only for the immediate next week during the weekend", () => {
+  const friday = new Date("2026-06-05T15:00:00.000Z");
+  const saturday = new Date("2026-06-06T15:00:00.000Z");
+  expect(generationWindowStatus("2026-06-08", friday).allowed).toBe(false);
+  expect(generationWindowStatus("2026-06-08", saturday).allowed).toBe(true);
+  expect(generationWindowStatus("2026-06-15", saturday).allowed).toBe(false);
+});
 
-  expect(generationWindowStatus("2026-06-08", beforeWindow).allowed).toBe(true);
-  expect(generationWindowStatus("2026-06-08", openWindow).allowed).toBe(true);
-  expect(generationWindowStatus("2026-06-15", wrongWeek).allowed).toBe(true);
+it("targets current schedule on weekdays and next schedule on weekends for AI changes", () => {
+  expect(defaultAiScheduleWeek(new Date("2026-06-03T15:00:00.000Z")).toISOString().slice(0, 10)).toBe("2026-06-01");
+  expect(defaultAiScheduleWeek(new Date("2026-06-06T15:00:00.000Z")).toISOString().slice(0, 10)).toBe("2026-06-08");
 });

@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSnapshot, reaisToCents, salesMonthStartForWeek } from "@/lib/data";
-import { normalizeWeekStart } from "@/lib/constants";
+import { weeklyWorkflowStatus } from "@/lib/deadlines";
 import { hashPassword, isValidEmail, isValidNumericPassword, normalizeEmail, numericPasswordError, requireManager, verifyPassword } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const auth = await requireManager(request);
   if ("error" in auth) return auth.error;
-  const weekStart = request.nextUrl.searchParams.get("weekStart") ?? undefined;
-  return NextResponse.json(await getAdminSnapshot(weekStart));
+  return NextResponse.json(await getAdminSnapshot());
 }
 
 export async function POST(request: NextRequest) {
@@ -73,7 +72,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.action === "updateMonthlySale") {
-    const weekStart = normalizeWeekStart(body.weekStart);
+    const weekStart = weeklyWorkflowStatus().weekStartDate;
     const monthStart = salesMonthStartForWeek(weekStart);
     const sale = await prisma.brokerMonthlySale.upsert({
       where: { monthStart_brokerId: { monthStart, brokerId: String(body.brokerId) } },
@@ -117,6 +116,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.action === "updateDutyPriorities") {
+    const workflow = weeklyWorkflowStatus();
+    if (!workflow.isOpen) return NextResponse.json({ error: "A prioridade da proxima escala so pode ser alterada no sabado ou domingo." }, { status: 403 });
     const items = (Array.isArray(body.items) ? body.items : []).filter((item: { localName?: string }) => String(item.localName ?? "").trim());
     await prisma.$transaction(
       items.map((item: { localName?: string; position?: number }, index: number) =>

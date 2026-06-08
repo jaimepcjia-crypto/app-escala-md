@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData } from "@/lib/seed";
 import { requireUser } from "@/lib/auth";
-import { dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange } from "@/lib/deadlines";
+import { currentSaoPauloDate, dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange, unavailableDateStatus } from "@/lib/deadlines";
 import { normalizeWeekStart } from "@/lib/constants";
 
 function uniqueDates(dates: Date[]) {
@@ -62,21 +62,27 @@ export async function GET(request: NextRequest) {
 
   const days = monthDays(month);
   const publishedSet = await publishedWeekKeys(days);
+  const today = currentSaoPauloDate();
+  const maxDate = new Date(Date.UTC(today.getUTCFullYear() + 1, today.getUTCMonth(), today.getUTCDate()));
 
   return NextResponse.json({
     month,
+    minMonth: monthFromDate(today),
+    maxMonth: monthFromDate(maxDate),
     role: auth.user.role,
     canEdit: auth.user.role === "BROKER",
     brokers,
     days: days.map((date) => {
-      const locked = publishedSet.has(weekKey(date));
+      const rangeStatus = unavailableDateStatus(date);
+      const published = publishedSet.has(weekKey(date));
+      const editable = auth.user.role === "BROKER" && rangeStatus.editable && !published;
       return {
         date: dateOnly(date),
         dayOfWeek: dayOfWeekForDate(date),
         dayLabel: dayLabel(dayOfWeekForDate(date)),
-        status: locked ? "locked" : "editable",
-        editable: auth.user.role === "BROKER" && !locked,
-        reason: locked ? "Escala desta semana ja publicada." : null
+        status: rangeStatus.status === "past" ? "past" : editable ? "editable" : "locked",
+        editable,
+        reason: published ? "Escala desta semana ja publicada." : rangeStatus.reason
       };
     }),
     unavailabilities: filteredUnavailabilities.map((item) => ({
@@ -127,7 +133,7 @@ export async function POST(request: NextRequest) {
 
   const monthDaysList = monthDays(month);
   const publishedSet = await publishedWeekKeys(monthDaysList);
-  const editableDates = monthDaysList.filter((date) => !publishedSet.has(weekKey(date)));
+  const editableDates = monthDaysList.filter((date) => unavailableDateStatus(date).editable && !publishedSet.has(weekKey(date)));
   const editableDateKeys = new Set(editableDates.map(dateOnly));
 
   for (const range of ranges) {
@@ -139,7 +145,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Horario invalido em ${key}. Use hora cheia, com inicio menor que termino.` }, { status: 400 });
     }
     if (!editableDateKeys.has(key)) {
-      return NextResponse.json({ error: `A escala da semana de ${key} ja foi publicada. Peça ao gerente para cancelar a publicação.` }, { status: 409 });
+      return NextResponse.json({ error: `A data ${key} esta fora da faixa editavel ou pertence a uma semana ja publicada.` }, { status: 409 });
     }
   }
 

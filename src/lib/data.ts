@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData, managerInitialEmail } from "@/lib/seed";
 import { formatWeekStart, normalizeWeekStart, type DayOfWeek, type Shift } from "@/lib/constants";
-import { addDays, dateForWeekDay, dateOnly, dayOfWeekForDate, generationWindowStatus, parseDateOnly } from "@/lib/deadlines";
+import { addDays, dateForWeekDay, dateOnly, dayOfWeekForDate, defaultAiScheduleWeek, generationWindowStatus, parseDateOnly, weeklyWorkflowStatus } from "@/lib/deadlines";
 
 export function salesMonthStartForWeek(weekStart: Date) {
   return new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), 1));
@@ -148,9 +148,11 @@ export function buildPlantaoPriorities(
     .sort((left, right) => left.position - right.position || left.localName.localeCompare(right.localName));
 }
 
-export async function getAdminSnapshot(weekStartInput?: string) {
+export async function getAdminSnapshot(_weekStartInput?: string) {
   await ensureSeedData();
-  const weekStart = normalizeWeekStart(weekStartInput);
+  const workflow = weeklyWorkflowStatus();
+  const weekStart = normalizeWeekStart(workflow.weekStartDate);
+  const aiWeekStart = defaultAiScheduleWeek();
   const monthStart = salesMonthStartForWeek(weekStart);
 
   const [teams, rawBrokers, dutyTypes, windows, schedules, imports, confirmations, salesRows, priorityRows, historyByBroker, pendingChangeRequest] = await Promise.all([
@@ -172,7 +174,7 @@ export async function getAdminSnapshot(weekStartInput?: string) {
     prisma.brokerMonthlySale.findMany({ where: { monthStart } }),
     prisma.dutyPriority.findMany(),
     publishedHistoryCounts(),
-    prisma.aiScheduleChangeRequest.findFirst({ where: { weekStart, status: "PENDING" }, orderBy: { createdAt: "desc" } })
+    prisma.aiScheduleChangeRequest.findFirst({ where: { weekStart: aiWeekStart, status: "PENDING" }, orderBy: { createdAt: "desc" } })
   ]);
 
   const salesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(100)]));
@@ -223,7 +225,15 @@ export async function getAdminSnapshot(weekStartInput?: string) {
     },
     generationGate: generationWindowStatus(weekStart)
     ,
-    pendingChangeRequest
+    pendingChangeRequest,
+    workflow: {
+      isOpen: workflow.isOpen,
+      daysUntilOpen: workflow.daysUntilOpen,
+      weekStart: workflow.weekStart,
+      weekEnd: workflow.weekEnd,
+      opensOn: workflow.opensOn,
+      closesOn: workflow.closesOn
+    }
   };
 }
 

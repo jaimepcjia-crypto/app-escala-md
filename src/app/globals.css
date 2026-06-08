@@ -4,8 +4,8 @@
 
 :root {
   color-scheme: light;
-  background: #f7f3ea;
-  color: #1d2328;
+  background: #f5f0e7;
+  color: #181716;
 }
 
 * {
@@ -16,11 +16,10 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(90deg, rgba(69, 97, 108, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(69, 97, 108, 0.08) 1px, transparent 1px),
-    #f7f3ea;
-  background-size: 28px 28px;
-  font-family: Georgia, "Times New Roman", serif;
+    radial-gradient(circle at 8% 0%, rgba(183, 154, 107, 0.16), transparent 28rem),
+    radial-gradient(circle at 100% 20%, rgba(166, 75, 50, 0.08), transparent 30rem),
+    #f5f0e7;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
 button,
@@ -31,22 +30,78 @@ textarea {
 }
 
 .ui-font {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
+  font-family: "Avenir Next", "Trebuchet MS", Verdana, sans-serif;
 }
 
 .panel {
-  border: 1px solid rgba(61, 69, 76, 0.18);
-  background: rgba(255, 252, 245, 0.92);
-  box-shadow: 0 18px 45px rgba(32, 39, 45, 0.12);
+  border: 1px solid rgba(94, 89, 83, 0.15);
+  background: rgba(255, 252, 246, 0.88);
+  box-shadow: 0 20px 60px rgba(42, 34, 27, 0.09);
+  backdrop-filter: blur(16px);
+}
+
+.hero-panel {
+  border: 1px solid rgba(94, 89, 83, 0.14);
+  background: linear-gradient(135deg, rgba(255, 252, 246, 0.98), rgba(233, 224, 210, 0.72));
+  box-shadow: 0 24px 70px rgba(42, 34, 27, 0.12);
 }
 
 .control {
-  border: 1px solid rgba(61, 69, 76, 0.22);
-  background: #fffaf0;
-  color: #1d2328;
+  border: 1px solid rgba(94, 89, 83, 0.22);
+  background: rgba(255, 253, 249, 0.95);
+  color: #181716;
 }
 
 .control:focus {
-  outline: 2px solid rgba(209, 79, 47, 0.42);
+  outline: 2px solid rgba(166, 75, 50, 0.35);
   outline-offset: 1px;
+}
+
+.eyebrow {
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #a64b32;
+}
+
+.action-primary,
+.action-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 800;
+  transition: transform 150ms ease, background 150ms ease, border-color 150ms ease;
+}
+
+.action-primary {
+  border: 1px solid #181716;
+  background: #181716;
+  color: #f5f0e7;
+}
+
+.action-secondary {
+  border: 1px solid rgba(94, 89, 83, 0.25);
+  background: rgba(255, 253, 249, 0.8);
+  color: #181716;
+}
+
+.action-primary:hover,
+.action-secondary:hover {
+  transform: translateY(-1px);
+  border-color: #a64b32;
+}
+
+details > summary {
+  list-style: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
 }

@@ -77,7 +77,7 @@ export function nextSaoPauloWeekStart(now = new Date()) {
   return addDays(currentSaoPauloWeekStart(now), 7);
 }
 
-function isInsideRange(date: Date, start: Date, end: Date) {
+export function isInsideRange(date: Date, start: Date, end: Date) {
   return date >= start && date <= end;
 }
 
@@ -88,19 +88,9 @@ export function unavailableDateStatus(dateInput: string | Date, now = new Date()
     return { status: "past" as const, editable: false, reason: "Data passada." };
   }
 
-  const currentWeekStart = currentSaoPauloWeekStart(now);
-  const currentWeekEnd = addDays(currentWeekStart, 6);
-  if (isInsideRange(target, currentWeekStart, currentWeekEnd)) {
-    return { status: "locked" as const, editable: false, reason: "Semana em vigor bloqueada." };
-  }
-
-  const parts = saoPauloParts(now);
-  const todayDay = dayOfWeekForDate(today);
-  const afterSundayCutoff = todayDay === "SUNDAY" && parts.hour >= 18;
-  const nextWeekStart = addDays(currentWeekStart, 7);
-  const nextWeekEnd = addDays(currentWeekStart, 13);
-  if (afterSundayCutoff && isInsideRange(target, nextWeekStart, nextWeekEnd)) {
-    return { status: "locked" as const, editable: false, reason: "Prazo encerrado domingo as 18h." };
+  const maxDate = new Date(Date.UTC(today.getUTCFullYear() + 1, today.getUTCMonth(), today.getUTCDate()));
+  if (target > maxDate) {
+    return { status: "locked" as const, editable: false, reason: "Data fora da faixa dos proximos 12 meses." };
   }
 
   return { status: "editable" as const, editable: true, reason: null };
@@ -108,8 +98,48 @@ export function unavailableDateStatus(dateInput: string | Date, now = new Date()
 
 export function generationWindowStatus(weekStartInput: string | Date, now = new Date()) {
   const weekStart = normalizeWeekStart(weekStartInput);
-  const allowedWeekStart = nextSaoPauloWeekStart(now);
-  return { allowed: true, reason: null, allowedWeekStart: dateOnly(weekStart || allowedWeekStart) };
+  const workflow = weeklyWorkflowStatus(now);
+  const isTargetWeek = weekStart.getTime() === workflow.weekStartDate.getTime();
+  return {
+    allowed: workflow.isOpen && isTargetWeek,
+    reason: !isTargetWeek
+      ? `Somente a escala da proxima semana (${workflow.weekStart}) pode ser publicada.`
+      : workflow.isOpen ? null : `A montagem e publicacao abrem no sabado, ${workflow.opensOn}.`,
+    allowedWeekStart: workflow.weekStart
+  };
+}
+
+export function weeklyWorkflowStatus(now = new Date()) {
+  const today = currentSaoPauloDate(now);
+  const weekStartDate = nextSaoPauloWeekStart(now);
+  const weekEndDate = addDays(weekStartDate, 6);
+  const opensOnDate = addDays(weekStartDate, -2);
+  const day = dayOfWeekForDate(today);
+  const isOpen = day === "SATURDAY" || day === "SUNDAY";
+  const daysUntilOpen = isOpen ? 0 : Math.max(0, Math.round((opensOnDate.getTime() - today.getTime()) / 86400000));
+  return {
+    isOpen,
+    daysUntilOpen,
+    weekStartDate,
+    weekEndDate,
+    opensOnDate,
+    weekStart: dateOnly(weekStartDate),
+    weekEnd: dateOnly(weekEndDate),
+    opensOn: dateOnly(opensOnDate),
+    closesOn: dateOnly(addDays(weekStartDate, -1))
+  };
+}
+
+export function defaultAiScheduleWeek(now = new Date()) {
+  const workflow = weeklyWorkflowStatus(now);
+  return workflow.isOpen ? workflow.weekStartDate : currentSaoPauloWeekStart(now);
+}
+
+export function aiScheduleWeekForCommand(command: string, now = new Date()) {
+  const normalized = command.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  if (/\b(proxima|seguinte|futura)\b/.test(normalized)) return nextSaoPauloWeekStart(now);
+  if (/\b(atual|em vigor|desta semana)\b/.test(normalized)) return currentSaoPauloWeekStart(now);
+  return defaultAiScheduleWeek(now);
 }
 
 export function monthRange(month: string) {

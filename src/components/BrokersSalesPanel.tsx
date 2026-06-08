@@ -28,12 +28,6 @@ export type BrokerSavePatch = {
   active: boolean;
 };
 
-function monthLabel(value?: string) {
-  if (!value) return "";
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(date);
-}
-
 // Monta a URL pessoal de acesso (pré-preenche o e-mail no login).
 export function accessUrlFor(email: string) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -42,7 +36,7 @@ export function accessUrlFor(email: string) {
 
 export function BrokersSalesPanel({
   brokers,
-  salesMonthStart,
+  salesMonthStart: _salesMonthStart,
   onSave,
   onSaleSave,
   onDelete

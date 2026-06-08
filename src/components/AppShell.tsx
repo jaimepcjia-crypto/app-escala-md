@@ -40,16 +40,16 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   }
 
   return (
-    <main className="min-h-screen px-4 py-5 text-ink sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <header className="panel flex flex-col gap-4 rounded-lg p-4 lg:flex-row lg:items-center lg:justify-between">
+    <main className="min-h-screen px-3 py-4 text-ink sm:px-5 lg:px-6">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
+        <header className="flex flex-col gap-4 rounded-[24px] bg-ink p-4 text-paper shadow-panel lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-md bg-ink text-paper">
+            <div className="grid h-12 w-12 place-items-center rounded-full border border-sand/50 bg-paper/5 text-sand">
               <CalendarDays size={24} />
             </div>
             <div>
-              <p className="ui-font text-xs font-bold uppercase tracking-[0.18em] text-signal">App Escala MD</p>
-              <h1 className="text-2xl font-bold leading-tight sm:text-3xl">Escala inteligente do Ferreira</h1>
+              <p className="ui-font text-xs font-bold uppercase tracking-[0.18em] text-sand">App Escala MD</p>
+              <h1 className="text-2xl font-semibold leading-tight sm:text-3xl">Escala inteligente do Ferreira</h1>
             </div>
           </div>
           <nav className="ui-font flex flex-wrap gap-2">
@@ -62,7 +62,7 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
                   href={link.href}
                   data-help={link.help}
                   className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold ${
-                    selected ? "border-ink bg-ink text-paper" : "border-graphite/20 bg-paper text-ink hover:border-signal"
+                    selected ? "border-sand bg-sand text-ink" : "border-paper/15 bg-paper/5 text-paper hover:border-sand"
                   }`}
                 >
                   <Icon size={16} />
@@ -75,7 +75,7 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
               onClick={logout}
               disabled={loggingOut}
               data-help="Sai desta conta e volta para a tela de login."
-              className="inline-flex items-center gap-2 rounded-md border border-signal/30 bg-signal/10 px-3 py-2 text-sm font-bold text-signal hover:border-signal disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-md border border-paper/15 bg-paper/5 px-3 py-2 text-sm font-bold text-paper hover:border-signal disabled:cursor-not-allowed disabled:opacity-60"
             >
               <LogOut size={16} />
               {loggingOut ? "Saindo" : "Sair"}

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth";
 import { normalizeWeekStart } from "@/lib/constants";
 import { alignParsedScheduleToWeek, parseScheduleFile } from "@/lib/importer";
 import { ensureSeedData } from "@/lib/seed";
+import { deleteUnpublishedImport, replaceWithValidatedImport } from "@/lib/import-workflow";
+import { generationWindowStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +13,10 @@ export async function POST(request: NextRequest) {
     if ("error" in auth) return auth.error;
 
     const formData = await request.formData();
-    const weekStart = normalizeWeekStart(String(formData.get("weekStart") ?? ""));
+    const workflow = weeklyWorkflowStatus();
+    const weekStart = normalizeWeekStart(workflow.weekStartDate);
+    const gate = generationWindowStatus(weekStart);
+    if (!gate.allowed) return NextResponse.json({ error: gate.reason }, { status: 403 });
     const file = formData.get("file");
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Arquivo nao enviado." }, { status: 400 });
@@ -21,32 +25,11 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = alignParsedScheduleToWeek(await parseScheduleFile(file.name, buffer), weekStart);
 
-    const scheduleImport = await prisma.scheduleImport.create({
-      data: {
-        weekStart,
-        fileName: file.name,
-        fileType: file.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
-        layoutJson: JSON.stringify(parsed.layout),
-        cells: {
-          create: parsed.cells.map((cell) => ({
-            rowIndex: cell.rowIndex,
-            colIndex: cell.colIndex,
-            rowLabel: cell.rowLabel,
-            colLabel: cell.colLabel,
-            localName: cell.localName,
-            timeLabel: cell.timeLabel,
-            dayOfWeek: cell.dayOfWeek,
-            shift: cell.shift,
-            startHour: cell.startHour,
-            dateLabel: cell.dateLabel,
-            text: cell.text,
-            colorHex: cell.colorHex,
-            ownerType: cell.ownerType,
-            confidence: cell.confidence
-          }))
-        }
-      },
-      include: { cells: true }
+    const scheduleImport = await replaceWithValidatedImport({
+      weekStart,
+      fileName: file.name,
+      fileType: file.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
+      parsed
     });
 
     return NextResponse.json({
@@ -59,5 +42,19 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Falha ao importar escala." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await requireManager(request);
+    if ("error" in auth) return auth.error;
+    const workflow = weeklyWorkflowStatus();
+    if (!workflow.isOpen) return NextResponse.json({ error: `Arquivos da proxima escala so podem ser excluidos no sabado ou domingo.` }, { status: 403 });
+    const importId = request.nextUrl.searchParams.get("importId") ?? "";
+    if (!importId) return NextResponse.json({ error: "Arquivo obrigatorio." }, { status: 400 });
+    return NextResponse.json(await deleteUnpublishedImport(importId, workflow.weekStartDate));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Falha ao excluir arquivo." }, { status: 400 });
   }
 }

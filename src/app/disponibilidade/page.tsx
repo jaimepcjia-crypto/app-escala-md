@@ -17,6 +17,8 @@ type UnavailabilityRange = {
 
 type AvailabilityPayload = {
   month: string;
+  minMonth: string;
+  maxMonth: string;
   role: "MANAGER" | "BROKER";
   canEdit: boolean;
   brokers: Array<{ id: string; name: string; team: { id: string; name: string } }>;
@@ -67,22 +69,28 @@ export default function AvailabilityPage() {
 
   async function load() {
     setBusy(true);
-    const params = new URLSearchParams({ month });
-    if (brokerId) params.set("brokerId", brokerId);
-    const response = await fetch(`/api/disponibilidade?${params.toString()}`, { cache: "no-store" });
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
+    try {
+      const params = new URLSearchParams({ month });
+      if (brokerId) params.set("brokerId", brokerId);
+      const response = await fetch(`/api/disponibilidade?${params.toString()}`, { cache: "no-store" });
+      if (response.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Falha ao carregar indisponibilidades.");
+      setData(payload);
+      const next: Record<string, RangeDraft> = {};
+      for (const item of payload.unavailabilities as UnavailabilityRange[]) {
+        if (item.startHour === null || item.endHour === null) continue;
+        next[item.date] = { startHour: String(item.startHour), endHour: String(item.endHour) };
+      }
+      setRanges(next);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao carregar indisponibilidades.");
+    } finally {
+      setBusy(false);
     }
-    const payload = await response.json();
-    setData(payload);
-    const next: Record<string, RangeDraft> = {};
-    for (const item of payload.unavailabilities as UnavailabilityRange[]) {
-      if (item.startHour === null || item.endHour === null) continue;
-      next[item.date] = { startHour: String(item.startHour), endHour: String(item.endHour) };
-    }
-    setRanges(next);
-    setBusy(false);
   }
 
   useEffect(() => {
@@ -135,11 +143,11 @@ export default function AvailabilityPage() {
           <label className="ui-font text-sm font-bold">
             Mes
             <div className="mt-1 flex gap-2">
-              <button className="rounded-md border border-graphite/20 bg-paper px-2" onClick={() => setMonth(monthMove(month, -1))} data-help="Volta um mes.">
+              <button className="rounded-md border border-graphite/20 bg-paper px-2 disabled:opacity-30" disabled={Boolean(data?.minMonth && month <= data.minMonth)} onClick={() => setMonth(monthMove(month, -1))} data-help="Volta um mes.">
                 <ChevronLeft size={16} />
               </button>
-              <input className="control min-w-0 flex-1 rounded-md px-3 py-2" type="month" value={month} onChange={(event) => setMonth(event.target.value)} data-help="Escolhe o mes do calendario Nao pode." />
-              <button className="rounded-md border border-graphite/20 bg-paper px-2" onClick={() => setMonth(monthMove(month, 1))} data-help="Avanca um mes.">
+              <input className="control min-w-0 flex-1 rounded-md px-3 py-2" type="month" min={data?.minMonth} max={data?.maxMonth} value={month} onChange={(event) => setMonth(event.target.value)} data-help="Escolhe um mes entre hoje e os proximos 12 meses." />
+              <button className="rounded-md border border-graphite/20 bg-paper px-2 disabled:opacity-30" disabled={Boolean(data?.maxMonth && month >= data.maxMonth)} onClick={() => setMonth(monthMove(month, 1))} data-help="Avanca um mes.">
                 <ChevronRight size={16} />
               </button>
             </div>

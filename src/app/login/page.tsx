@@ -31,9 +31,15 @@ export default function LoginPage() {
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-8 text-ink">
-      <section className="panel w-full max-w-md rounded-lg p-5">
-        <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Escala MD</p>
-        <h1 className="mt-1 text-3xl font-bold">Entrar</h1>
+      <section className="hero-panel grid w-full max-w-4xl overflow-hidden rounded-[30px] md:grid-cols-[1.05fr_0.95fr]">
+        <div className="bg-ink p-7 text-paper sm:p-10">
+          <p className="eyebrow !text-sand">Escala MD</p>
+          <h1 className="mt-5 text-4xl font-semibold leading-tight sm:text-5xl">Decisões semanais com clareza e equilíbrio.</h1>
+          <p className="ui-font mt-5 max-w-sm text-sm leading-relaxed text-paper/65">Gestão de plantões, indisponibilidades e meritocracia em um único fluxo operacional.</p>
+        </div>
+        <div className="p-6 sm:p-9">
+        <p className="eyebrow">Acesso seguro</p>
+        <h2 className="mt-2 text-3xl font-semibold">Entrar</h2>
         <div className="mt-5 grid gap-3">
           <label className="ui-font text-sm font-bold">
             Email
@@ -56,12 +62,13 @@ export default function LoginPage() {
               data-help="Informe sua senha numerica."
             />
           </label>
-          <button className="ui-font inline-flex items-center justify-center gap-2 rounded-md bg-ink px-4 py-3 font-bold text-paper" onClick={login} data-help="Entra no app com este email e senha.">
+          <button className="action-primary py-3" onClick={login} data-help="Entra no app com este email e senha.">
             <LogIn size={18} />
             Acessar
           </button>
           {error ? <p className="ui-font rounded-md border border-signal/20 bg-signal/10 p-2 text-sm text-signal">{error}</p> : null}
           <p className="ui-font text-xs text-graphite">O gerente cria os logins dos corretores e pode redefinir senhas quando necessario.</p>
+        </div>
         </div>
       </section>
     </main>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth";
-import { normalizeWeekStart } from "@/lib/constants";
+import { aiScheduleWeekForCommand, generationWindowStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { getAdminSnapshot } from "@/lib/data";
 import { requestLlmJson } from "@/lib/llm";
 import { generateAndPublishSchedule } from "@/lib/schedule-actions";
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const command = String(body.command ?? "").trim();
-    const weekStart = normalizeWeekStart(body.weekStart);
+    const weekStart = aiScheduleWeekForCommand(command);
 
     const explicitDecision = body.decision === "CONFIRM" || body.decision === "CANCEL" ? body.decision : null;
     const decision = explicitDecision ?? (command ? textDecision(command) : null);
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (intent.action === "GENERATE_AND_PUBLISH") {
-      const result = await generateAndPublishSchedule(weekStart);
+      const result = await generateAndPublishSchedule(weeklyWorkflowStatus().weekStartDate);
       return NextResponse.json({
         intent,
         message: result.conflicts.length
@@ -136,12 +136,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (intent.action === "CANCEL_PUBLICATION") {
+      const workflow = weeklyWorkflowStatus();
+      const gate = generationWindowStatus(workflow.weekStartDate);
+      if (!gate.allowed) return NextResponse.json({ error: gate.reason }, { status: 403 });
       // Tira a escala da semana do ar: PUBLISHED -> DRAFT (1 schedule por semana).
       const result = await prisma.schedule.updateMany({
-        where: { weekStart, status: "PUBLISHED" },
+        where: { weekStart: workflow.weekStartDate, status: "PUBLISHED" },
         data: { status: "DRAFT", publishedAt: null }
       });
-      await invalidatePendingChangeRequests(weekStart);
+      await invalidatePendingChangeRequests(workflow.weekStartDate);
       return NextResponse.json({
         intent,
         message: result.count
@@ -152,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (intent.action === "REGENERATE_MORE_BALANCED") {
-      const result = await generateAndPublishSchedule(weekStart, { balanceMode: "MORE_BALANCED" });
+      const result = await generateAndPublishSchedule(weeklyWorkflowStatus().weekStartDate, { balanceMode: "MORE_BALANCED" });
       return NextResponse.json({
         intent,
         message: result.conflicts.length
@@ -163,7 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (intent.action === "INVESTIGATE_BENEFIT_AND_REGENERATE") {
-      const result = await generateAndPublishSchedule(weekStart, { balanceMode: "MORE_BALANCED", focusBrokerName: intent.focusBrokerName });
+      const result = await generateAndPublishSchedule(weeklyWorkflowStatus().weekStartDate, { balanceMode: "MORE_BALANCED", focusBrokerName: intent.focusBrokerName });
       return NextResponse.json({
         intent,
         message: intent.focusBrokerName
