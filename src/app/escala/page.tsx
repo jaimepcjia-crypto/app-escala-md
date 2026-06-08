@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/StatusPill";
-import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
+import { WeeklyScheduleAgenda } from "@/components/WeeklyScheduleAgenda";
 import { AiReviewCard } from "@/components/AiReviewCard";
 import { ScheduleChangeNotices } from "@/components/ScheduleChangeNotices";
 import { normalizeWeekStart } from "@/lib/constants";
@@ -126,13 +126,14 @@ export default function SalesRankingPage() {
           </div>
         </section>
 
-        {/* Escala final (embaixo) */}
-        <section className="panel rounded-lg p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <section className="grid gap-4">
+          <div className="hero-panel rounded-[26px] p-5 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold">Escala final</h2>
+              <p className="eyebrow">Agenda publicada</p>
+              <h2 className="mt-1 text-3xl font-semibold">Escala final da semana</h2>
               <p className="ui-font mt-1 text-xs text-graphite">
-                Escala publicada da semana. Alterações de atribuição são feitas exclusivamente por pedidos à IA do gerente.
+                Uma leitura por dia, horário e local. Alterações de atribuição são feitas exclusivamente por pedidos à IA do gerente.
               </p>
             </div>
             {isManager ? (
@@ -151,6 +152,7 @@ export default function SalesRankingPage() {
             ) : (
               <StatusPill tone="warn">aguardando</StatusPill>
             )}
+            </div>
           </div>
 
           {loadError ? <div className="ui-font mb-4 rounded-md border border-signal/30 bg-signal/10 p-3 text-sm font-bold text-signal">{loadError}</div> : null}
@@ -158,7 +160,12 @@ export default function SalesRankingPage() {
           <ScheduleChangeNotices notices={schedule?.changeNotices} />
 
           {schedule?.assignments?.length ? (
-            <SpreadsheetScheduleGrid schedule={schedule} highlightBrokerId={me?.broker?.id ?? null} />
+            <WeeklyScheduleAgenda
+              assignments={schedule.assignments}
+              weekStart={data?.weekStart ?? weekStart}
+              brokerId={me?.broker?.id ?? null}
+              isManager={isManager}
+            />
           ) : (
             <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
               Nenhuma escala publicada para esta semana.
