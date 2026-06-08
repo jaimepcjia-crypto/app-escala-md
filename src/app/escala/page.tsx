@@ -172,6 +172,67 @@ export default function SalesRankingPage() {
             </div>
           )}
         </section>
+
+        {/* Memorando: como o sistema distribui os plantoes (visivel a todos) */}
+        <section className="panel rounded-lg p-4">
+          <div className="mb-2">
+            <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Memorando</p>
+            <h2 className="text-xl font-bold">Como os plantões são distribuídos</h2>
+            <p className="ui-font mt-1 text-xs text-graphite">
+              Critérios configurados no sistema e o peso de cada um, do mais forte ao de desempate.
+            </p>
+          </div>
+
+          <div className="ui-font space-y-3 text-sm">
+            <div className="rounded-md border border-graphite/15 bg-paper p-3">
+              <div className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-graphite">
+                Primeiro, regras que tiram o corretor do plantão (travas)
+              </div>
+              <ul className="list-disc pl-5 text-graphite">
+                <li>Indisponibilidade: quem marcou “não pode” naquele horário não entra.</li>
+                <li>Plantão externo: só corretores autorizados a fazer externo.</li>
+                <li>Não pode estar em dois plantões no mesmo horário.</li>
+                <li>Corretor inativo não entra na distribuição.</li>
+              </ul>
+            </div>
+
+            <div className="rounded-md border border-graphite/15 bg-linen/50 p-3">
+              <div className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-graphite">
+                Depois, entre os que podem, vale o peso de cada critério
+              </div>
+              <ul className="space-y-2 text-graphite">
+                <li>
+                  <strong className="text-ink">1) Vendas (meritocracia) — o critério mais forte.</strong>{" "}
+                  Quem vende mais tem preferência, principalmente nos melhores plantões. Os <strong>3 plantões
+                  mais valiosos</strong> reservam <strong>40%</strong> das vagas às melhores faixas de vendas
+                  (1º/2º lugar no melhor; 3º/4º no segundo; 5º/6º no terceiro). Se todos estiverem empatados
+                  em vendas, esse critério não favorece ninguém.
+                </li>
+                <li>
+                  <strong className="text-ink">2) Equilíbrio entre os corretores — peso médio.</strong> Quem já
+                  pegou mais plantões no geral cede a vez, para a distribuição ficar justa.
+                </li>
+                <li>
+                  <strong className="text-ink">3) Não concentrar o mesmo tipo de plantão — peso médio-baixo.</strong>{" "}
+                  Evita que sempre o mesmo corretor pegue o mesmo tipo de plantão.
+                </li>
+                <li>
+                  <strong className="text-ink">4) Espalhar ao longo da semana — peso médio.</strong> Evita
+                  acumular muitos plantões do mesmo corretor na mesma semana.
+                </li>
+                <li>
+                  <strong className="text-ink">5) Desempate justo.</strong> Quando dá empate, um sorteio leve
+                  decide, sem favorecer ninguém.
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-xs text-graphite">
+              Observação: o gerente pode pedir à IA o “modo mais equilibrado”, que aumenta o peso do
+              equilíbrio entre os corretores nessa geração.
+            </p>
+          </div>
+        </section>
       </div>
     </AppShell>
   );
