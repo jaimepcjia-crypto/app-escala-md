@@ -5,6 +5,7 @@ import { generateSchedule } from "@/lib/scheduler";
 import { latestConfirmedImport } from "@/lib/import-workflow";
 import { generationWindowStatus } from "@/lib/deadlines";
 import { buildBrokerStatsWithRanks, reviewScheduleWithLlm } from "@/lib/llm";
+import { invalidatePendingChangeRequests } from "@/lib/ai-schedule-changes";
 
 export async function generateAndPublishSchedule(
   weekStartInput: string | Date,
@@ -22,6 +23,7 @@ export async function generateAndPublishSchedule(
   }
 
   const planningData = await listPlanningData(weekStart);
+  await invalidatePendingChangeRequests(weekStart);
   const focusBroker = options.focusBrokerName
     ? planningData.brokers.find((broker) => broker.name.toLowerCase() === options.focusBrokerName!.trim().toLowerCase())
     : null;

@@ -153,7 +153,7 @@ export async function getAdminSnapshot(weekStartInput?: string) {
   const weekStart = normalizeWeekStart(weekStartInput);
   const monthStart = salesMonthStartForWeek(weekStart);
 
-  const [teams, rawBrokers, dutyTypes, windows, schedules, imports, confirmations, salesRows, priorityRows, historyByBroker] = await Promise.all([
+  const [teams, rawBrokers, dutyTypes, windows, schedules, imports, confirmations, salesRows, priorityRows, historyByBroker, pendingChangeRequest] = await Promise.all([
     prisma.team.findMany({ orderBy: { name: "asc" } }),
     prisma.broker.findMany({ include: { team: true, historyTotal: true, user: true }, orderBy: { name: "asc" } }),
     prisma.dutyType.findMany({ orderBy: { priority: "asc" } }),
@@ -171,7 +171,8 @@ export async function getAdminSnapshot(weekStartInput?: string) {
     prisma.unavailabilityConfirmation.findMany({ where: { weekStart }, include: { broker: true } }),
     prisma.brokerMonthlySale.findMany({ where: { monthStart } }),
     prisma.dutyPriority.findMany(),
-    publishedHistoryCounts()
+    publishedHistoryCounts(),
+    prisma.aiScheduleChangeRequest.findFirst({ where: { weekStart, status: "PENDING" }, orderBy: { createdAt: "desc" } })
   ]);
 
   const salesByBroker = new Map(rawBrokers.map((broker) => [broker.id, BigInt(100)]));
@@ -221,6 +222,8 @@ export async function getAdminSnapshot(weekStartInput?: string) {
       allConfirmed: ferreiraBrokers.length > 0 && ferreiraBrokers.every((broker) => confirmedBrokerIds.has(broker.id))
     },
     generationGate: generationWindowStatus(weekStart)
+    ,
+    pendingChangeRequest
   };
 }
 
@@ -237,7 +240,8 @@ export async function getPublishedSchedule(weekStartInput?: string, options: { f
         include: { broker: { include: { team: true } }, dutyType: true, importedCell: true, manualAlerts: true },
         orderBy: [{ dayOfWeek: "asc" }, { shift: "asc" }, { slot: "asc" }]
       },
-      aiReview: true
+      aiReview: true,
+      changeNotices: { orderBy: { confirmedAt: "asc" } }
     },
     orderBy: { publishedAt: "desc" }
   });

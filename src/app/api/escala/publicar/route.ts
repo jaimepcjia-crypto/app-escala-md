@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth";
+import { invalidatePendingChangeRequests } from "@/lib/ai-schedule-changes";
 
 export async function POST(request: NextRequest) {
   const auth = await requireManager(request);
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
       assignments: { include: { broker: { include: { team: true } }, dutyType: true } }
     }
   });
+  await invalidatePendingChangeRequests(schedule.weekStart);
 
   return NextResponse.json({ schedule: published });
 }

@@ -44,15 +44,9 @@ function groupKey(assignment: Assignment) {
 
 export function RealScheduleGrid({
   assignments,
-  brokers,
-  editable,
-  onChange,
   highlightBrokerId
 }: {
   assignments: Assignment[];
-  brokers?: { id: string; name: string }[];
-  editable?: boolean;
-  onChange?: (assignmentId: string, brokerId: string) => void;
   highlightBrokerId?: string | null;
 }) {
   const groups = [...new Set(assignments.map(groupKey))];
@@ -106,27 +100,11 @@ export function RealScheduleGrid({
                               className="rounded-md border border-black/25 px-1 py-1 text-center font-medium uppercase"
                               style={{ background, color: textColor(background) }}
                             >
-                              {editable && assignment.assignmentType !== "EXTERNAL_IMPORTED" && brokers ? (
-                                <select
-                                  className="w-full rounded-sm border border-black/30 bg-white/80 px-1 py-0.5 text-[11px] font-bold text-black"
-                                  value={assignment.broker?.id ?? ""}
-                                  onChange={(event) => onChange?.(assignment.id, event.target.value)}
-                                  data-help="Troca manualmente o corretor deste plantao e registra alertas se houver violacao."
-                                >
-                                  <option value="">Sem cobertura</option>
-                                  {brokers.map((broker) => (
-                                    <option key={broker.id} value={broker.id}>
-                                      {broker.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span className={isHighlightedBroker ? "font-black" : "font-medium"}>{displayName}</span>
-                              )}
-                              {assignment.assignmentType === "FERREIRA_MANUAL" ? <div className="mt-1"><StatusPill tone="warn">manual</StatusPill></div> : null}
-                              {assignment.isViolation || assignment.balanceAlert ? (
+                              <span className={isHighlightedBroker ? "font-black" : "font-medium"}>{displayName}</span>
+                              {assignment.assignmentType === "FERREIRA_MANAGER_AI" ? <div className="mt-1"><StatusPill tone="warn">gerente via IA</StatusPill></div> : null}
+                              {assignment.isViolation || assignment.balanceAlert || assignment.manualAlerts?.length ? (
                                 <div className="mt-1 rounded-sm bg-white/80 p-1 text-[10px] text-signal">
-                                  {assignment.violationReason || assignment.balanceAlert}
+                                  {assignment.violationReason || assignment.balanceAlert || assignment.manualAlerts?.map((item) => item.reason).join(" | ")}
                                 </div>
                               ) : null}
                             </div>

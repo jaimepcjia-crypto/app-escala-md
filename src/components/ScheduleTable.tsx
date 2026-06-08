@@ -15,15 +15,9 @@ type Assignment = {
 };
 
 export function ScheduleTable({
-  assignments,
-  brokers,
-  editable,
-  onChange
+  assignments
 }: {
   assignments: Assignment[];
-  brokers?: { id: string; name: string }[];
-  editable?: boolean;
-  onChange?: (assignmentId: string, brokerId: string) => void;
 }) {
   const dutyNames = [...new Set(assignments.map((item) => item.dutyType.name))];
 
@@ -62,23 +56,7 @@ export function ScheduleTable({
                               <span className="text-xs font-bold text-graphite">#{assignment.slot}</span>
                               {assignment.isViolation ? <StatusPill tone="warn">alerta</StatusPill> : <StatusPill tone="ok">ok</StatusPill>}
                             </div>
-                            {editable && brokers ? (
-                              <select
-                                className="control w-full rounded-md px-2 py-1 text-xs"
-                                value={assignment.broker?.id ?? ""}
-                                onChange={(event) => onChange?.(assignment.id, event.target.value)}
-                                data-help="Troca manualmente o corretor deste plantao."
-                              >
-                                <option value="">Sem cobertura</option>
-                                {brokers.map((broker) => (
-                                  <option key={broker.id} value={broker.id}>
-                                    {broker.name}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <div className="font-bold">{assignment.broker?.name ?? "Sem cobertura"}</div>
-                            )}
+                            <div className="font-bold">{assignment.broker?.name ?? "Sem cobertura"}</div>
                             {assignment.broker?.team ? <div className="text-xs text-graphite">{assignment.broker.team.name}</div> : null}
                             {assignment.violationReason ? <p className="mt-1 text-xs text-signal">{assignment.violationReason}</p> : null}
                           </div>

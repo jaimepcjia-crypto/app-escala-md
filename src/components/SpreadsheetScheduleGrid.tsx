@@ -1,10 +1,7 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
-import { X } from "lucide-react";
+import { useMemo, type CSSProperties } from "react";
 import { RealScheduleGrid } from "@/components/RealScheduleGrid";
-
-type BrokerOption = { id: string; name: string };
 
 type Assignment = {
   id: string;
@@ -152,27 +149,15 @@ function displayText(cell: LayoutCell, assignment?: Assignment) {
   return assignment.broker?.name || "Sem cobertura";
 }
 
-function isFerreiraEditable(cell: LayoutCell, assignment?: Assignment) {
-  return cell.ownerType === "FERREIRA_WINDOW" || assignment?.assignmentType === "FERREIRA_AI" || assignment?.assignmentType === "FERREIRA_MANUAL";
-}
-
 export function SpreadsheetScheduleGrid({
   schedule,
-  brokers,
-  editable,
-  onChange,
   highlightBrokerId,
   fallbackForGroupedFilter = false
 }: {
   schedule: ScheduleWithLayout;
-  brokers?: BrokerOption[];
-  editable?: boolean;
-  onChange?: (assignmentId: string, brokerId: string) => void | Promise<void>;
   highlightBrokerId?: string | null;
   fallbackForGroupedFilter?: boolean;
 }) {
-  const [selected, setSelected] = useState<Assignment | null>(null);
-  const [selectedBrokerId, setSelectedBrokerId] = useState("");
   const layout = useMemo(() => parseLayout(schedule.import?.layoutJson), [schedule.import?.layoutJson]);
   const assignments = schedule.assignments ?? [];
 
@@ -201,28 +186,12 @@ export function SpreadsheetScheduleGrid({
     return (
       <RealScheduleGrid
         assignments={assignments}
-        brokers={brokers}
-        editable={editable}
-        onChange={onChange ? (assignmentId, brokerId) => { void onChange(assignmentId, brokerId); } : undefined}
         highlightBrokerId={highlightBrokerId}
       />
     );
   }
 
-  function openEditor(assignment: Assignment | undefined, cell: LayoutCell) {
-    if (!editable || !brokers?.length || !assignment || !isFerreiraEditable(cell, assignment)) return;
-    setSelected(assignment);
-    setSelectedBrokerId(assignment.broker?.id ?? "");
-  }
-
-  async function saveManualChange() {
-    if (!selected) return;
-    await onChange?.(selected.id, selectedBrokerId);
-    setSelected(null);
-  }
-
   return (
-    <>
       <div className="overflow-auto rounded-lg border border-black bg-white">
         <table className="border-collapse bg-white font-sans" style={{ tableLayout: "fixed" }}>
           <colgroup>
@@ -240,7 +209,6 @@ export function SpreadsheetScheduleGrid({
                     if (cell.skip) return null;
                     const assignment = assignmentByPosition.get(`${cell.rowIndex}:${cell.colIndex}`);
                     const text = displayText(cell, assignment);
-                    const editableCell = isFerreiraEditable(cell, assignment);
                     const highlighted = Boolean(highlightBrokerId && assignment?.broker?.id === highlightBrokerId);
                     const hasAlert = Boolean(assignment?.isViolation || assignment?.balanceAlert || assignment?.manualAlerts?.length);
                     return (
@@ -248,18 +216,15 @@ export function SpreadsheetScheduleGrid({
                         key={`${cell.rowIndex}:${cell.colIndex}`}
                         rowSpan={cell.rowSpan}
                         colSpan={cell.colSpan}
-                        className={editable && editableCell ? "cursor-pointer" : undefined}
                         style={{
                           ...cellStyle(cell, row?.height),
                           outline: hasAlert ? "2px solid #D94A2B" : highlighted ? "2px solid #111827" : undefined,
                           outlineOffset: "-2px"
                         }}
-                        onClick={() => openEditor(assignment, cell)}
-                        data-help={editable && editableCell ? "Clique para trocar manualmente o corretor desta janela roxa." : undefined}
                         title={hasAlert ? assignment?.violationReason || assignment?.balanceAlert || "Ajuste manual com alerta" : undefined}
                       >
                         <span className={highlighted ? "font-black" : undefined}>{text}</span>
-                        {assignment?.assignmentType === "FERREIRA_MANUAL" ? <span className="ml-1 text-[7px] font-black">MANUAL</span> : null}
+                        {assignment?.assignmentType === "FERREIRA_MANAGER_AI" ? <span className="ml-1 text-[7px] font-black">GERENTE VIA IA</span> : null}
                       </td>
                     );
                   })}
@@ -269,47 +234,5 @@ export function SpreadsheetScheduleGrid({
           </tbody>
         </table>
       </div>
-
-      {selected ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-lg border border-graphite/20 bg-linen p-4 shadow-xl">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <p className="ui-font text-xs font-bold uppercase tracking-[0.14em] text-signal">Ajuste manual</p>
-                <h3 className="text-xl font-bold">{selected.importedCell?.localName ?? selected.dutyType?.name ?? "Janela roxa"}</h3>
-                <p className="ui-font text-sm text-graphite">{selected.importedCell?.timeLabel ?? "Horario importado do XLSX"}</p>
-              </div>
-              <button className="rounded-md border border-graphite/20 p-1" onClick={() => setSelected(null)} data-help="Fecha esta janela sem salvar.">
-                <X size={18} />
-              </button>
-            </div>
-            <label className="ui-font block text-sm font-bold">
-              Corretor
-              <select
-                className="control mt-1 w-full rounded-md px-3 py-2"
-                value={selectedBrokerId}
-                onChange={(event) => setSelectedBrokerId(event.target.value)}
-                data-help="Escolhe o corretor que ficara nesta janela roxa."
-              >
-                <option value="">Sem cobertura</option>
-                {brokers?.map((broker) => (
-                  <option key={broker.id} value={broker.id}>
-                    {broker.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="ui-font rounded-md border border-graphite/20 px-3 py-2 font-bold" onClick={() => setSelected(null)} data-help="Cancela a troca manual.">
-                Cancelar
-              </button>
-              <button className="ui-font rounded-md bg-ink px-3 py-2 font-bold text-paper" onClick={saveManualChange} data-help="Salva a troca e registra alertas se houver regra quebrada.">
-                Salvar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
   );
 }

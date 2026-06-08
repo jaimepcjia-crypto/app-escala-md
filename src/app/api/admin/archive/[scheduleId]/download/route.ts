@@ -110,7 +110,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           importedCell: true,
           dutyType: true
         }
-      }
+      },
+      changeNotices: { orderBy: { confirmedAt: "asc" } }
     }
   });
 
@@ -156,6 +157,45 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     } catch {
       // ExcelJS rejects duplicate or invalid merges; imported layout may already be covered.
     }
+  }
+
+  if (schedule.changeNotices.length) {
+    const notices = workbook.addWorksheet("Avisos de alterações");
+    notices.columns = [
+      { header: "Local", key: "local", width: 28 },
+      { header: "Dia", key: "day", width: 16 },
+      { header: "Horário", key: "time", width: 18 },
+      { header: "Corretor anterior", key: "previous", width: 24 },
+      { header: "Novo corretor", key: "next", width: 24 },
+      { header: "Critérios contrariados", key: "warnings", width: 70 },
+      { header: "Confirmação", key: "confirmation", width: 34 }
+    ];
+    notices.getRow(1).font = { bold: true };
+    for (const notice of schedule.changeNotices) {
+      const warnings = (() => {
+        try {
+          const parsed = JSON.parse(notice.warningsJson);
+          return Array.isArray(parsed) && parsed.length ? parsed.join(" | ") : "Nenhum critério flexível contrariado.";
+        } catch {
+          return notice.warningsJson;
+        }
+      })();
+      notices.addRow({
+        local: notice.localName,
+        day: notice.dayOfWeek,
+        time: notice.timeLabel || (notice.startHour !== null ? `${String(notice.startHour).padStart(2, "0")}:00` : ""),
+        previous: notice.previousBrokerName || "Sem cobertura",
+        next: notice.newBrokerName || "Sem cobertura",
+        warnings,
+        confirmation: "Mudança confirmada expressamente pelo gerente via IA."
+      });
+    }
+    notices.eachRow((row) => {
+      row.alignment = { vertical: "top", wrapText: true };
+      row.eachCell((cell) => {
+        cell.border = { top: borderSide(), right: borderSide(), bottom: borderSide(), left: borderSide() };
+      });
+    });
   }
 
   const weekStart = weekLabel(schedule.weekStart);

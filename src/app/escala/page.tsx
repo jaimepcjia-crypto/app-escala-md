@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/StatusPill";
 import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { AiReviewCard } from "@/components/AiReviewCard";
+import { ScheduleChangeNotices } from "@/components/ScheduleChangeNotices";
 import { normalizeWeekStart } from "@/lib/constants";
 
 type PublicData = {
@@ -18,6 +19,7 @@ type PublicData = {
     import?: { id: string; fileName: string; layoutJson?: string | null } | null;
     assignments: any[];
     aiReview?: any | null;
+    changeNotices?: any[];
   };
   brokers: Array<{
     id: string;
@@ -75,22 +77,9 @@ export default function SalesRankingPage() {
   useEffect(() => {
     if (!me) return;
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me, isManager, weekStart]);
 
-  async function adjustAssignment(assignmentId: string, brokerId: string) {
-    const response = await fetch("/api/escala/ajustar", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assignmentId, brokerId })
-    });
-    if (response.ok) await reload();
-  }
-
   const schedule = data?.schedule ?? null;
-  const ferreiraBrokers = (data?.brokers ?? [])
-    .filter((broker) => broker.team?.isFerreira)
-    .map((broker) => ({ id: broker.id, name: broker.name }));
 
   return (
     <AppShell active="escala">
@@ -137,7 +126,7 @@ export default function SalesRankingPage() {
             <div>
               <h2 className="text-xl font-bold">Escala final</h2>
               <p className="ui-font mt-1 text-xs text-graphite">
-                {isManager ? "Escala publicada da semana — voce pode ajustar as janelas roxas." : "Escala publicada da semana."}
+                Escala publicada da semana. Alterações de atribuição são feitas exclusivamente por pedidos à IA do gerente.
               </p>
             </div>
             {isManager ? (
@@ -159,13 +148,10 @@ export default function SalesRankingPage() {
           </div>
 
           {schedule?.aiReview ? <AiReviewCard review={schedule.aiReview} /> : null}
+          <ScheduleChangeNotices notices={schedule?.changeNotices} />
 
           {schedule?.assignments?.length ? (
-            isManager ? (
-              <SpreadsheetScheduleGrid schedule={schedule} brokers={ferreiraBrokers} editable onChange={adjustAssignment} />
-            ) : (
-              <SpreadsheetScheduleGrid schedule={schedule} highlightBrokerId={me?.broker?.id ?? null} />
-            )
+            <SpreadsheetScheduleGrid schedule={schedule} highlightBrokerId={me?.broker?.id ?? null} />
           ) : (
             <div className="ui-font rounded-md border border-graphite/15 bg-paper p-4 text-sm text-graphite">
               Nenhuma escala publicada para esta semana.
@@ -179,7 +165,7 @@ export default function SalesRankingPage() {
             <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Memorando</p>
             <h2 className="text-xl font-bold">Como os plantões são distribuídos</h2>
             <p className="ui-font mt-1 text-xs text-graphite">
-              Critérios configurados no sistema e o peso de cada um, do mais forte ao de desempate.
+              Critérios configurados no sistema e o peso aproximado de cada um, do mais forte ao de desempate.
             </p>
           </div>
 
@@ -202,26 +188,26 @@ export default function SalesRankingPage() {
               </div>
               <ul className="space-y-2 text-graphite">
                 <li>
-                  <strong className="text-ink">1) Vendas (meritocracia) — o critério mais forte.</strong>{" "}
+                  <strong className="text-ink">1) Vendas (meritocracia) — <span className="text-signal">70%</span> · o critério mais forte.</strong>{" "}
                   Quem vende mais tem preferência, principalmente nos melhores plantões. Os <strong>3 plantões
                   mais valiosos</strong> reservam <strong>40%</strong> das vagas às melhores faixas de vendas
                   (1º/2º lugar no melhor; 3º/4º no segundo; 5º/6º no terceiro). Se todos estiverem empatados
                   em vendas, esse critério não favorece ninguém.
                 </li>
                 <li>
-                  <strong className="text-ink">2) Equilíbrio entre os corretores — peso médio.</strong> Quem já
+                  <strong className="text-ink">2) Equilíbrio entre os corretores — <span className="text-signal">15%</span> · peso médio.</strong> Quem já
                   pegou mais plantões no geral cede a vez, para a distribuição ficar justa.
                 </li>
                 <li>
-                  <strong className="text-ink">3) Não concentrar o mesmo tipo de plantão — peso médio-baixo.</strong>{" "}
+                  <strong className="text-ink">3) Não concentrar o mesmo tipo de plantão — <span className="text-signal">5%</span> · peso médio-baixo.</strong>{" "}
                   Evita que sempre o mesmo corretor pegue o mesmo tipo de plantão.
                 </li>
                 <li>
-                  <strong className="text-ink">4) Espalhar ao longo da semana — peso médio.</strong> Evita
+                  <strong className="text-ink">4) Espalhar ao longo da semana — <span className="text-signal">7%</span> · peso médio.</strong> Evita
                   acumular muitos plantões do mesmo corretor na mesma semana.
                 </li>
                 <li>
-                  <strong className="text-ink">5) Desempate justo.</strong> Quando dá empate, um sorteio leve
+                  <strong className="text-ink">5) Desempate justo — <span className="text-signal">3%</span>.</strong> Quando dá empate, um sorteio leve
                   decide, sem favorecer ninguém.
                 </li>
               </ul>

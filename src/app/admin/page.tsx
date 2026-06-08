@@ -16,6 +16,7 @@ type Snapshot = {
   imports: Array<{ id: string; fileName: string; status: string; cells: Array<{ id: string; ownerType: string }> }>;
   readiness: { totalFerreiraBrokers: number; confirmed: number; allConfirmed: boolean };
   plantaoPriorities: Array<{ localName: string; position: number }>;
+  pendingChangeRequest?: { id: string; summary: string; status: string } | null;
 };
 
 type ArchiveImport = {
@@ -97,6 +98,7 @@ export default function AdminPage() {
   const [iaCommand, setIaCommand] = useState("");
   const [iaAnswer, setIaAnswer] = useState("");
   const [iaBusy, setIaBusy] = useState(false);
+  const [iaPendingRequestId, setIaPendingRequestId] = useState<string | null>(null);
   const [newBroker, setNewBroker] = useState({ name: "", email: "", initialPassword: "", canExternalDuty: true, active: true });
   const [managerPassword, setManagerPassword] = useState({ currentPassword: "", newPassword: "" });
   const [priorityNotice, setPriorityNotice] = useState("");
@@ -114,14 +116,15 @@ export default function AdminPage() {
       window.location.href = "/login";
       return;
     }
-    setSnapshot(await snapRes.json());
+    const nextSnapshot = await snapRes.json();
+    setSnapshot(nextSnapshot);
+    setIaPendingRequestId(nextSnapshot.pendingChangeRequest?.id ?? null);
     setArchive(await archRes.json());
     setBusy(false);
   }
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStart]);
 
   useEffect(() => {
@@ -279,7 +282,7 @@ export default function AdminPage() {
     savePriorities(normalized);
   }
 
-  async function askIa(commandOverride?: string) {
+  async function askIa(commandOverride?: string, decision?: "CONFIRM" | "CANCEL") {
     const command = (commandOverride ?? iaCommand).trim();
     if (!command) {
       setIaAnswer("IA: digite uma ordem antes de enviar.");
@@ -291,11 +294,12 @@ export default function AdminPage() {
       const response = await fetch("/api/ia/comando", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ weekStart, command })
+        body: JSON.stringify({ weekStart, command, decision, requestId: iaPendingRequestId })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Falha ao executar comando da IA.");
       setIaAnswer(data.message ?? "IA: comando executado.");
+      setIaPendingRequestId(data.state === "CONFIRMATION_REQUIRED" ? data.requestId : null);
       setIaCommand("");
       await load();
     } catch (error) {
@@ -429,6 +433,24 @@ export default function AdminPage() {
                   <pre className="whitespace-pre-wrap">{iaAnswer}</pre>
                 </div>
               ) : null}
+              {iaPendingRequestId ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    className="ui-font rounded-md bg-signal px-3 py-2 font-bold text-paper"
+                    onClick={() => askIa("Confirme o pedido pendente", "CONFIRM")}
+                    disabled={iaBusy}
+                  >
+                    Confirmar mudanças
+                  </button>
+                  <button
+                    className="ui-font rounded-md border border-graphite/20 bg-paper px-3 py-2 font-bold"
+                    onClick={() => askIa("Cancele o pedido pendente", "CANCEL")}
+                    disabled={iaBusy}
+                  >
+                    Cancelar pedido
+                  </button>
+                </div>
+              ) : null}
               <div className="mt-2 grid gap-1">
                 {[
                   "IA verifique se todos os corretores ja colocaram suas impossibilidades",
@@ -436,6 +458,8 @@ export default function AdminPage() {
                   "IA cancele a publicacao (corretores voltam a editar)",
                   "IA me diga porque essa escala esta justa",
                   "IA tente equilibrar mais e gere novamente"
+                  ,
+                  "IA troque o corretor atual por outro em uma janela específica da escala"
                 ].map((example) => (
                   <button
                     key={example}

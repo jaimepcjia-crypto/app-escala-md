@@ -5,11 +5,12 @@ import { normalizeWeekStart } from "@/lib/constants";
 import { getAdminSnapshot } from "@/lib/data";
 import { requestLlmJson } from "@/lib/llm";
 import { generateAndPublishSchedule } from "@/lib/schedule-actions";
+import { analyzeScheduleChangeRequest, decideScheduleChangeRequest, invalidatePendingChangeRequests, type RequestedScheduleChange } from "@/lib/ai-schedule-changes";
 
 async function interpretCommand(command: string) {
-  const result = await requestLlmJson<{ action: string; focusBrokerName: string | null; shortReason: string }>({
+  const result = await requestLlmJson<{ action: string; focusBrokerName: string | null; shortReason: string; changes?: RequestedScheduleChange[] }>({
     system:
-      "Voce e a IA operacional do App Escala MD. O gerente Ferreira escreve ordens livres e voce decide autonomamente qual acao do app deve ser executada. Nao execute nada fora das acoes permitidas: apenas escolha uma acao e retorne JSON valido. Acoes permitidas: CHECK_UNAVAILABILITY verifica se todos informaram o NAO PODE; GENERATE_AND_PUBLISH gera e publica a escala; EXPLAIN_FAIRNESS explica por que a escala publicada esta justa; REGENERATE_MORE_BALANCED gera e publica outra versao buscando mais equilibrio; INVESTIGATE_BENEFIT_AND_REGENERATE investiga um corretor citado como possivelmente beneficiado e gera/publica outra versao; CANCEL_PUBLICATION cancela a publicacao da escala da semana (tira do ar) para os corretores voltarem a poder editar as indisponibilidades; HELP responde quando a ordem nao pede uma acao executavel. Retorne somente JSON com action, focusBrokerName e shortReason.",
+      "Voce e a IA operacional do App Escala MD. Escolha somente uma acao permitida e retorne JSON valido. CHANGE_ASSIGNMENTS representa pedidos pontuais para colocar, retirar ou trocar corretores em uma ou varias janelas. Para cada mudanca, extraia localName, dayOfWeek (MONDAY a SUNDAY), startHour numerico quando informado, timeLabel quando informado, currentBrokerName quando informado e newBrokerName; para retirar deixe newBrokerName nulo. Nao invente detalhes ausentes. Outras acoes: CHECK_UNAVAILABILITY, GENERATE_AND_PUBLISH, EXPLAIN_FAIRNESS, REGENERATE_MORE_BALANCED, INVESTIGATE_BENEFIT_AND_REGENERATE, CANCEL_PUBLICATION e HELP. Retorne somente JSON com action, focusBrokerName, shortReason e changes.",
     user: command,
     schema: {
       type: "OBJECT",
@@ -23,13 +24,29 @@ async function interpretCommand(command: string) {
             "REGENERATE_MORE_BALANCED",
             "INVESTIGATE_BENEFIT_AND_REGENERATE",
             "CANCEL_PUBLICATION",
+            "CHANGE_ASSIGNMENTS",
             "HELP"
           ]
         },
         focusBrokerName: { type: "STRING" },
         shortReason: { type: "STRING" }
+        ,
+        changes: {
+          type: "ARRAY",
+          items: {
+            type: "OBJECT",
+            properties: {
+              localName: { type: "STRING" },
+              dayOfWeek: { type: "STRING" },
+              startHour: { type: "NUMBER" },
+              timeLabel: { type: "STRING" },
+              currentBrokerName: { type: "STRING" },
+              newBrokerName: { type: "STRING" }
+            }
+          }
+        }
       },
-      required: ["action", "focusBrokerName", "shortReason"]
+      required: ["action", "focusBrokerName", "shortReason", "changes"]
     }
   });
   const allowed = new Set([
@@ -39,13 +56,22 @@ async function interpretCommand(command: string) {
     "REGENERATE_MORE_BALANCED",
     "INVESTIGATE_BENEFIT_AND_REGENERATE",
     "CANCEL_PUBLICATION",
+    "CHANGE_ASSIGNMENTS",
     "HELP"
   ]);
   return {
     action: allowed.has(result.parsed.action) ? result.parsed.action : "HELP",
     focusBrokerName: result.parsed.focusBrokerName || null,
-    shortReason: result.parsed.shortReason || "Comando interpretado pela IA."
+    shortReason: result.parsed.shortReason || "Comando interpretado pela IA.",
+    changes: Array.isArray(result.parsed.changes) ? result.parsed.changes : []
   };
+}
+
+function textDecision(command: string) {
+  const normalized = command.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
+  if (/^(sim|confirmo|confirme|pode confirmar|pode executar|execute|aplique)(\b|$)/.test(normalized)) return "CONFIRM" as const;
+  if (/^(nao|cancele|cancelar|desista|nao confirme)(\b|$)/.test(normalized)) return "CANCEL" as const;
+  return null;
 }
 
 function reviewText(review: any) {
@@ -67,9 +93,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const command = String(body.command ?? "").trim();
     const weekStart = normalizeWeekStart(body.weekStart);
+
+    const explicitDecision = body.decision === "CONFIRM" || body.decision === "CANCEL" ? body.decision : null;
+    const decision = explicitDecision ?? (command ? textDecision(command) : null);
+    if (decision) {
+      const result = await decideScheduleChangeRequest(weekStart, decision, body.requestId ? String(body.requestId) : null);
+      return NextResponse.json({ ...result, data: result });
+    }
     if (!command) return NextResponse.json({ error: "Digite uma ordem para a IA." }, { status: 400 });
 
     const intent = await interpretCommand(command);
+
+    if (intent.action === "CHANGE_ASSIGNMENTS") {
+      const result = await analyzeScheduleChangeRequest(weekStart, command, intent.changes);
+      return NextResponse.json({ intent, ...result, data: result });
+    }
 
     if (intent.action === "CHECK_UNAVAILABILITY") {
       const snapshot = await getAdminSnapshot(weekStart.toISOString());
@@ -103,6 +141,7 @@ export async function POST(request: NextRequest) {
         where: { weekStart, status: "PUBLISHED" },
         data: { status: "DRAFT", publishedAt: null }
       });
+      await invalidatePendingChangeRequests(weekStart);
       return NextResponse.json({
         intent,
         message: result.count

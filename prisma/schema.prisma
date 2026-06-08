@@ -120,6 +120,8 @@ model Schedule {
   publishedAt DateTime?
   assignments ScheduleAssignment[]
   aiReview    AiScheduleReview?
+  changeRequests AiScheduleChangeRequest[]
+  changeNotices ScheduleChangeNotice[]
 }
 
 model AiScheduleReview {
@@ -159,6 +161,7 @@ model ScheduleAssignment {
   violationReason String?
   balanceAlert    String?
   manualAlerts    ManualAdjustmentAlert[]
+  changeNotices   ScheduleChangeNotice[]
   createdAt       DateTime  @default(now())
 }
 
@@ -228,4 +231,44 @@ model ManualAdjustmentAlert {
   severity     String   @default("WARN")
   reason       String
   createdAt    DateTime @default(now())
+}
+
+model AiScheduleChangeRequest {
+  id              String   @id @default(cuid())
+  scheduleId      String
+  schedule        Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  weekStart       DateTime
+  command         String
+  status          String   @default("PENDING")
+  proposedJson    String
+  analysisJson    String
+  summary         String
+  confirmedAt     DateTime?
+  canceledAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  notices         ScheduleChangeNotice[]
+
+  @@index([weekStart, status])
+}
+
+model ScheduleChangeNotice {
+  id                 String   @id @default(cuid())
+  scheduleId         String
+  schedule           Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  requestId          String
+  request            AiScheduleChangeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assignmentId       String?
+  assignment         ScheduleAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  previousBrokerName String?
+  newBrokerName      String?
+  localName          String
+  dayOfWeek          String
+  timeLabel          String?
+  startHour          Int?
+  warningsJson       String   @default("[]")
+  confirmedAt        DateTime @default(now())
+
+  @@index([scheduleId])
+  @@index([assignmentId])
 }

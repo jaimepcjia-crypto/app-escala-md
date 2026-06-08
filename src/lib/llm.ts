@@ -161,7 +161,7 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       "A escala ja foi gerada pelo motor deterministico; a LLM deve auditar e sugerir melhorias, nao inventar regras.",
       "Cores/janelas roxas sao do gerente Ferreira; demais plantões importados sao externos e preservados.",
       "Meritocracia usa faixas reais de vendas e reservas nos tres melhores plantoes.",
-      "O gerente pode editar manualmente, mas deve ver impacto no balanceamento.",
+      "O gerente somente pode alterar atribuicoes por pedido a IA, com analise e confirmacao; mudancas confirmadas devem mostrar o impacto no balanceamento.",
       "Se todos estiverem com venda padrao R$ 1,00 ou empatados, explique que vendas nao favorecem nenhum corretor individualmente.",
       "Nao use nomes tecnicos de campos do sistema, como salesRank, assignmentType, null ou JSON."
     ],
