@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData } from "@/lib/seed";
 import { requireUser } from "@/lib/auth";
-import { currentSaoPauloDate, dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange, unavailableDateStatus } from "@/lib/deadlines";
+import { currentSaoPauloDate, currentSaoPauloWeekStart, dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { normalizeWeekStart } from "@/lib/constants";
 
 function uniqueDates(dates: Date[]) {
@@ -36,6 +36,8 @@ export async function GET(request: NextRequest) {
   const month = request.nextUrl.searchParams.get("month") ?? monthFromDate();
   const requestedBrokerId = request.nextUrl.searchParams.get("brokerId") ?? "";
   const { start, end } = monthRange(month);
+  const workflow = weeklyWorkflowStatus();
+  const currentWeekStart = currentSaoPauloWeekStart();
 
   const brokerWhere = auth.user.role === "BROKER"
     ? { id: auth.user.brokerId ?? "" }
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
         ...(requestedBrokerId ? { id: requestedBrokerId } : {})
       };
 
-  const [brokers, unavailabilities] = await Promise.all([
+  const [brokers, unavailabilities, currentSchedule, activeFerreiraBrokers, nextWeekConfirmations] = await Promise.all([
     prisma.broker.findMany({ where: brokerWhere, include: { team: true }, orderBy: { name: "asc" } }),
     prisma.unavailability.findMany({
       where: {
@@ -54,7 +56,10 @@ export async function GET(request: NextRequest) {
       },
       include: { broker: { include: { team: true } } },
       orderBy: [{ date: "asc" }, { startHour: "asc" }]
-    })
+    }),
+    prisma.schedule.findFirst({ where: { weekStart: currentWeekStart, status: "PUBLISHED" }, select: { id: true, publishedAt: true } }),
+    prisma.broker.findMany({ where: { active: true, team: { isFerreira: true } }, select: { id: true } }),
+    prisma.unavailabilityConfirmation.findMany({ where: { weekStart: workflow.weekStartDate }, select: { brokerId: true } })
   ]);
 
   const visibleBrokerIds = new Set(brokers.map((broker) => broker.id));
@@ -71,6 +76,20 @@ export async function GET(request: NextRequest) {
     maxMonth: monthFromDate(maxDate),
     role: auth.user.role,
     canEdit: auth.user.role === "BROKER",
+    liveStatus: {
+      currentSchedule: {
+        weekStart: workflow.currentWeekStart,
+        weekEnd: workflow.currentWeekEnd,
+        published: Boolean(currentSchedule),
+        publishedAt: currentSchedule?.publishedAt?.toISOString() ?? null
+      },
+      nextWeekAvailability: {
+        weekStart: workflow.weekStart,
+        weekEnd: workflow.weekEnd,
+        confirmed: new Set(nextWeekConfirmations.map((item) => item.brokerId)).size,
+        total: activeFerreiraBrokers.length
+      }
+    },
     brokers,
     days: days.map((date) => {
       const rangeStatus = unavailableDateStatus(date);

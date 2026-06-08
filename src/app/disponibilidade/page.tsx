@@ -21,6 +21,10 @@ type AvailabilityPayload = {
   maxMonth: string;
   role: "MANAGER" | "BROKER";
   canEdit: boolean;
+  liveStatus: {
+    currentSchedule: { weekStart: string; weekEnd: string; published: boolean; publishedAt: string | null };
+    nextWeekAvailability: { weekStart: string; weekEnd: string; confirmed: number; total: number };
+  };
   brokers: Array<{ id: string; name: string; team: { id: string; name: string } }>;
   days: Array<{ date: string; dayOfWeek: string; dayLabel: string; status: "editable" | "locked" | "past"; editable: boolean; reason: string | null }>;
   unavailabilities: UnavailabilityRange[];
@@ -45,6 +49,10 @@ function formatDay(date: string) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00.000Z`));
+}
+
 function hourLabel(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
@@ -67,8 +75,8 @@ export default function AvailabilityPage() {
     return map;
   }, [data]);
 
-  async function load() {
-    setBusy(true);
+  async function load(silent = false) {
+    if (!silent) setBusy(true);
     try {
       const params = new URLSearchParams({ month });
       if (brokerId) params.set("brokerId", brokerId);
@@ -89,12 +97,14 @@ export default function AvailabilityPage() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Falha ao carregar indisponibilidades.");
     } finally {
-      setBusy(false);
+      if (!silent) setBusy(false);
     }
   }
 
   useEffect(() => {
-    load();
+    void load();
+    const timer = window.setInterval(() => void load(true), 30_000);
+    return () => window.clearInterval(timer);
   }, [month, brokerId]);
 
   function updateRange(date: string, patch: Partial<RangeDraft>) {
@@ -161,6 +171,21 @@ export default function AvailabilityPage() {
               </select>
             </label>
           ) : null}
+        </div>
+
+        <div className="mb-5 grid overflow-hidden rounded-2xl border border-graphite/10 bg-white/50 lg:grid-cols-2">
+          <LiveMetric
+            label="Escala em vigor"
+            period={data ? `${formatDate(data.liveStatus.currentSchedule.weekStart)} a ${formatDate(data.liveStatus.currentSchedule.weekEnd)}` : "Carregando"}
+            value={data?.liveStatus.currentSchedule.published ? "Publicada" : "Não publicada"}
+            ok={Boolean(data?.liveStatus.currentSchedule.published)}
+          />
+          <LiveMetric
+            label="Indisponibilidades da próxima escala"
+            period={data ? `${formatDate(data.liveStatus.nextWeekAvailability.weekStart)} a ${formatDate(data.liveStatus.nextWeekAvailability.weekEnd)}` : "Carregando"}
+            value={`${data?.liveStatus.nextWeekAvailability.confirmed ?? 0}/${data?.liveStatus.nextWeekAvailability.total ?? 0} corretores`}
+            ok={Boolean(data?.liveStatus.nextWeekAvailability.total && data.liveStatus.nextWeekAvailability.confirmed === data.liveStatus.nextWeekAvailability.total)}
+          />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -233,5 +258,17 @@ export default function AvailabilityPage() {
         {notice ? <p className="ui-font mt-4 rounded-md border border-graphite/15 bg-paper p-2 text-sm">{notice}</p> : null}
       </section>
     </AppShell>
+  );
+}
+
+function LiveMetric({ label, period, value, ok }: { label: string; period: string; value: string; ok: boolean }) {
+  return (
+    <div className="flex min-h-24 items-center justify-between gap-4 border-b border-graphite/10 p-4 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0">
+      <div>
+        <p className="ui-font text-xs font-bold uppercase tracking-[0.14em] text-graphite">{label}</p>
+        <p className="ui-font mt-1 text-xs text-graphite">{period}</p>
+      </div>
+      <StatusPill tone={ok ? "ok" : "warn"}>{value}</StatusPill>
+    </div>
   );
 }
