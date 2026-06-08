@@ -105,3 +105,25 @@ details > summary {
 details > summary::-webkit-details-marker {
   display: none;
 }
+
+@keyframes ferreira-gold-pulse {
+  0%, 100% {
+    background-color: rgba(210, 169, 86, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(128, 91, 23, 0.18);
+  }
+  50% {
+    background-color: rgba(238, 199, 111, 0.92);
+    box-shadow: inset 0 0 0 1px rgba(128, 91, 23, 0.42), 0 0 9px rgba(183, 154, 107, 0.48);
+  }
+}
+
+.ferreira-pulse {
+  animation: ferreira-gold-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ferreira-pulse {
+    animation: none;
+    background-color: rgba(226, 186, 96, 0.82);
+  }
+}

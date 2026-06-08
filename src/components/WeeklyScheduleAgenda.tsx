@@ -58,9 +58,8 @@ export function WeeklyScheduleAgenda({
           <button className="action-secondary whitespace-nowrap" onClick={clearFilters}><X size={14} /> Limpar</button>
         </div>
         <div className="ui-font mt-3 flex flex-wrap items-center gap-4 text-[11px] text-graphite">
-          <Legend color="bg-moss" label="Equipe Ferreira" />
+          <Legend color="bg-sand" label="Equipe Ferreira · destaque pulsante" />
           <Legend color="bg-steel" label="Definido no arquivo" />
-          <Legend color="bg-sand" label="Meu plantão" />
           <Legend color="bg-signal" label="Alerta ou mudança" />
         </div>
       </section>
@@ -134,17 +133,23 @@ function AssignmentLine({ assignment, brokerId, query }: { assignment: AgendaAss
   const mine = Boolean(brokerId && assignment.broker?.id === brokerId);
   const managerChange = assignment.assignmentType === "FERREIRA_MANAGER_AI";
   const alert = assignment.isViolation || warnings.length > 0 || managerChange;
+  const ferreira = assignment.assignmentType !== "EXTERNAL_IMPORTED";
   const match = Boolean(query.trim() && name.toLocaleLowerCase("pt-BR").includes(query.trim().toLocaleLowerCase("pt-BR")));
-  const origin = assignment.assignmentType === "EXTERNAL_IMPORTED" ? "bg-steel/10 border-steel/25" : "bg-moss/10 border-moss/25";
+  const appearance = ferreira
+    ? "ferreira-pulse border-sand text-black font-black"
+    : alert
+      ? "border-signal bg-signal/10 font-bold"
+      : "border-steel/25 bg-steel/10 font-semibold";
 
   return (
     <div
       data-assignment-id={assignment.id}
-      className={`relative flex min-h-7 items-center gap-1 border-l-4 px-2 py-1 text-[11px] leading-tight ${mine ? "border-sand bg-sand/25 font-black" : alert ? "border-signal bg-signal/10 font-bold" : `${origin} font-semibold`} ${match ? "ring-2 ring-inset ring-signal" : ""}`}
+      data-ferreira={ferreira ? "true" : undefined}
+      className={`relative flex min-h-7 items-center gap-1 border-l-4 px-2 py-1 text-[11px] leading-tight ${appearance} ${alert ? "ring-1 ring-inset ring-signal/60" : ""} ${mine ? "outline outline-2 outline-offset-[-2px] outline-black/55" : ""} ${match ? "ring-2 ring-inset ring-signal" : ""}`}
       title={warnings.join(" | ") || (managerChange ? "Mudança confirmada pelo gerente via IA." : undefined)}
     >
       <span className="min-w-0 flex-1 break-words">{name}</span>
-      {alert ? <AlertTriangle className="shrink-0 text-signal" size={11} /> : mine ? <Sparkles className="shrink-0 text-sand" size={11} /> : null}
+      {alert ? <AlertTriangle className="shrink-0 text-signal" size={11} /> : mine ? <Sparkles className="shrink-0 text-black" size={11} /> : null}
     </div>
   );
 }
