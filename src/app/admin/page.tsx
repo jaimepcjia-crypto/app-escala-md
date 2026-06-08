@@ -108,19 +108,27 @@ export default function AdminPage() {
 
   async function load() {
     setBusy(true);
-    const [snapRes, archRes] = await Promise.all([
-      fetch(`/api/admin?weekStart=${weekStart}`, { cache: "no-store" }),
-      fetch(`/api/admin/archive?weekStart=${weekStart}`, { cache: "no-store" })
-    ]);
-    if (snapRes.status === 401 || archRes.status === 401) {
-      window.location.href = "/login";
-      return;
+    try {
+      const [snapRes, archRes] = await Promise.all([
+        fetch(`/api/admin?weekStart=${weekStart}`, { cache: "no-store" }),
+        fetch(`/api/admin/archive?weekStart=${weekStart}`, { cache: "no-store" })
+      ]);
+      if (snapRes.status === 401 || archRes.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      const [nextSnapshot, nextArchive] = await Promise.all([snapRes.json(), archRes.json()]);
+      if (!snapRes.ok) throw new Error(nextSnapshot.error ?? "Falha ao carregar os dados administrativos.");
+      if (!archRes.ok) throw new Error(nextArchive.error ?? "Falha ao carregar o historico de escalas.");
+      setSnapshot(nextSnapshot);
+      setIaPendingRequestId(nextSnapshot.pendingChangeRequest?.id ?? null);
+      setArchive(nextArchive);
+      setNotice("");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao carregar o painel administrativo.");
+    } finally {
+      setBusy(false);
     }
-    const nextSnapshot = await snapRes.json();
-    setSnapshot(nextSnapshot);
-    setIaPendingRequestId(nextSnapshot.pendingChangeRequest?.id ?? null);
-    setArchive(await archRes.json());
-    setBusy(false);
   }
 
   useEffect(() => {

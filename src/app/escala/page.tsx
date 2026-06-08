@@ -46,6 +46,7 @@ export default function SalesRankingPage() {
   const [data, setData] = useState<PublicData | null>(null);
   const [me, setMe] = useState<any>(null);
   const [weekStart, setWeekStart] = useState(nextPlanningWeekStart());
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
@@ -71,7 +72,13 @@ export default function SalesRankingPage() {
       window.location.href = "/login";
       return;
     }
-    if (response.ok) setData(await response.json());
+    const payload = await response.json();
+    if (!response.ok) {
+      setLoadError(payload.error ?? "Falha ao carregar a escala.");
+      return;
+    }
+    setLoadError("");
+    setData(payload);
   }
 
   useEffect(() => {
@@ -147,6 +154,7 @@ export default function SalesRankingPage() {
             )}
           </div>
 
+          {loadError ? <div className="ui-font mb-4 rounded-md border border-signal/30 bg-signal/10 p-3 text-sm font-bold text-signal">{loadError}</div> : null}
           {schedule?.aiReview ? <AiReviewCard review={schedule.aiReview} /> : null}
           <ScheduleChangeNotices notices={schedule?.changeNotices} />
 
