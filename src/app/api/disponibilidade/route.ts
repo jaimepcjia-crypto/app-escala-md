@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData } from "@/lib/seed";
 import { requireUser } from "@/lib/auth";
-import { dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange, unavailableDateStatus } from "@/lib/deadlines";
+import { dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange } from "@/lib/deadlines";
 import { normalizeWeekStart } from "@/lib/constants";
 
 function uniqueDates(dates: Date[]) {
@@ -11,6 +11,21 @@ function uniqueDates(dates: Date[]) {
 
 function weekStartForDate(date: Date) {
   return normalizeWeekStart(date);
+}
+
+function weekKey(date: Date) {
+  return weekStartForDate(date).toISOString();
+}
+
+// Semanas (weekStart) com escala PUBLICADA — bloqueiam a edicao do corretor.
+// (Editavel a qualquer hora; trava so quando a escala da semana esta publicada.)
+async function publishedWeekKeys(days: Date[]) {
+  const weekStarts = [...new Map(days.map((date) => [weekKey(date), weekStartForDate(date)] as const)).values()];
+  const published = await prisma.schedule.findMany({
+    where: { status: "PUBLISHED", weekStart: { in: weekStarts } },
+    select: { weekStart: true }
+  });
+  return new Set(published.map((schedule) => schedule.weekStart.toISOString()));
 }
 
 export async function GET(request: NextRequest) {
@@ -45,20 +60,23 @@ export async function GET(request: NextRequest) {
   const visibleBrokerIds = new Set(brokers.map((broker) => broker.id));
   const filteredUnavailabilities = unavailabilities.filter((item) => visibleBrokerIds.has(item.brokerId));
 
+  const days = monthDays(month);
+  const publishedSet = await publishedWeekKeys(days);
+
   return NextResponse.json({
     month,
     role: auth.user.role,
     canEdit: auth.user.role === "BROKER",
     brokers,
-    days: monthDays(month).map((date) => {
-      const status = unavailableDateStatus(date);
+    days: days.map((date) => {
+      const locked = publishedSet.has(weekKey(date));
       return {
         date: dateOnly(date),
         dayOfWeek: dayOfWeekForDate(date),
         dayLabel: dayLabel(dayOfWeekForDate(date)),
-        status: status.status,
-        editable: auth.user.role === "BROKER" && status.editable,
-        reason: status.reason
+        status: locked ? "locked" : "editable",
+        editable: auth.user.role === "BROKER" && !locked,
+        reason: locked ? "Escala desta semana ja publicada." : null
       };
     }),
     unavailabilities: filteredUnavailabilities.map((item) => ({
@@ -107,7 +125,9 @@ export async function POST(request: NextRequest) {
     })
     .filter(Boolean) as Array<{ date: Date; startHour: number; endHour: number }>;
 
-  const editableDates = monthDays(month).filter((date) => unavailableDateStatus(date).editable);
+  const monthDaysList = monthDays(month);
+  const publishedSet = await publishedWeekKeys(monthDaysList);
+  const editableDates = monthDaysList.filter((date) => !publishedSet.has(weekKey(date)));
   const editableDateKeys = new Set(editableDates.map(dateOnly));
 
   for (const range of ranges) {
@@ -119,7 +139,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Horario invalido em ${key}. Use hora cheia, com inicio menor que termino.` }, { status: 400 });
     }
     if (!editableDateKeys.has(key)) {
-      return NextResponse.json({ error: `A data ${key} nao pode mais ser alterada.` }, { status: 409 });
+      return NextResponse.json({ error: `A escala da semana de ${key} ja foi publicada. Peça ao gerente para cancelar a publicação.` }, { status: 409 });
     }
   }
 
