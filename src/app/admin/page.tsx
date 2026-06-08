@@ -237,6 +237,7 @@ export default function AdminPage() {
                 {[
                   "IA verifique se todos os corretores ja colocaram suas impossibilidades",
                   "IA publique a escala",
+                  "IA cancele a publicacao (corretores voltam a editar)",
                   "IA me diga porque essa escala esta justa",
                   "IA tente equilibrar mais e gere novamente"
                 ].map((example) => (

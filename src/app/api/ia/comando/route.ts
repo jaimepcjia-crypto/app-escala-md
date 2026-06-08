@@ -9,7 +9,7 @@ import { generateAndPublishSchedule } from "@/lib/schedule-actions";
 async function interpretCommand(command: string) {
   const result = await requestLlmJson<{ action: string; focusBrokerName: string | null; shortReason: string }>({
     system:
-      "Voce e a IA operacional do App Escala MD. O gerente Ferreira escreve ordens livres e voce decide autonomamente qual acao do app deve ser executada. Nao execute nada fora das acoes permitidas: apenas escolha uma acao e retorne JSON valido. Acoes permitidas: CHECK_UNAVAILABILITY verifica se todos informaram o NAO PODE; GENERATE_AND_PUBLISH gera e publica a escala; EXPLAIN_FAIRNESS explica por que a escala publicada esta justa; REGENERATE_MORE_BALANCED gera e publica outra versao buscando mais equilibrio; INVESTIGATE_BENEFIT_AND_REGENERATE investiga um corretor citado como possivelmente beneficiado e gera/publica outra versao; HELP responde quando a ordem nao pede uma acao executavel. Retorne somente JSON com action, focusBrokerName e shortReason.",
+      "Voce e a IA operacional do App Escala MD. O gerente Ferreira escreve ordens livres e voce decide autonomamente qual acao do app deve ser executada. Nao execute nada fora das acoes permitidas: apenas escolha uma acao e retorne JSON valido. Acoes permitidas: CHECK_UNAVAILABILITY verifica se todos informaram o NAO PODE; GENERATE_AND_PUBLISH gera e publica a escala; EXPLAIN_FAIRNESS explica por que a escala publicada esta justa; REGENERATE_MORE_BALANCED gera e publica outra versao buscando mais equilibrio; INVESTIGATE_BENEFIT_AND_REGENERATE investiga um corretor citado como possivelmente beneficiado e gera/publica outra versao; CANCEL_PUBLICATION cancela a publicacao da escala da semana (tira do ar) para os corretores voltarem a poder editar as indisponibilidades; HELP responde quando a ordem nao pede uma acao executavel. Retorne somente JSON com action, focusBrokerName e shortReason.",
     user: command,
     schema: {
       type: "OBJECT",
@@ -22,6 +22,7 @@ async function interpretCommand(command: string) {
             "EXPLAIN_FAIRNESS",
             "REGENERATE_MORE_BALANCED",
             "INVESTIGATE_BENEFIT_AND_REGENERATE",
+            "CANCEL_PUBLICATION",
             "HELP"
           ]
         },
@@ -37,6 +38,7 @@ async function interpretCommand(command: string) {
     "EXPLAIN_FAIRNESS",
     "REGENERATE_MORE_BALANCED",
     "INVESTIGATE_BENEFIT_AND_REGENERATE",
+    "CANCEL_PUBLICATION",
     "HELP"
   ]);
   return {
@@ -94,6 +96,21 @@ export async function POST(request: NextRequest) {
           ? `IA: escala gerada e publicada com ${result.conflicts.length} conflito(s).`
           : "IA: escala gerada e publicada sem conflitos.",
         data: result
+      });
+    }
+
+    if (intent.action === "CANCEL_PUBLICATION") {
+      // Tira a escala da semana do ar: PUBLISHED -> DRAFT (1 schedule por semana).
+      const result = await prisma.schedule.updateMany({
+        where: { weekStart, status: "PUBLISHED" },
+        data: { status: "DRAFT", publishedAt: null }
+      });
+      return NextResponse.json({
+        intent,
+        message: result.count
+          ? "IA: publicação cancelada. A escala saiu do ar e os corretores já podem editar as indisponibilidades desta semana de novo."
+          : "IA: não havia escala publicada nesta semana para cancelar.",
+        data: { canceled: result.count }
       });
     }
 
