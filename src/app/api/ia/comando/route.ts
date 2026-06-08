@@ -7,11 +7,13 @@ import { requestLlmJson } from "@/lib/llm";
 import { generateAndPublishSchedule } from "@/lib/schedule-actions";
 import { analyzeScheduleChangeRequest, decideScheduleChangeRequest, invalidatePendingChangeRequests, type RequestedScheduleChange } from "@/lib/ai-schedule-changes";
 import { answerBrokerOperationalQuestion } from "@/lib/ai-operational-questions";
+import { answerAppQuestion, type AppAssistantContext } from "@/lib/app-assistant";
+import { directOperationalAction } from "@/lib/ai-command-intent";
 
 async function interpretCommand(command: string) {
   const result = await requestLlmJson<{ action: string; focusBrokerName: string | null; shortReason: string; changes?: RequestedScheduleChange[] }>({
     system:
-      "Voce e a IA operacional do App Escala MD. Escolha somente uma acao permitida e retorne JSON valido. CHANGE_ASSIGNMENTS representa pedidos pontuais para colocar, retirar ou trocar corretores em uma ou varias janelas. Para cada mudanca, extraia localName, dayOfWeek (MONDAY a SUNDAY), startHour numerico quando informado, timeLabel quando informado, currentBrokerName quando informado e newBrokerName; para retirar deixe newBrokerName nulo. Nao invente detalhes ausentes. Outras acoes: CHECK_UNAVAILABILITY, GENERATE_AND_PUBLISH, EXPLAIN_FAIRNESS, REGENERATE_MORE_BALANCED, INVESTIGATE_BENEFIT_AND_REGENERATE, CANCEL_PUBLICATION e HELP. Retorne somente JSON com action, focusBrokerName, shortReason e changes.",
+      "Voce classifica mensagens do gerente no App Escala MD. Acoes no motor so podem ser escolhidas quando o gerente der uma ordem inequívoca para executar ou analisar uma operacao. Perguntas, duvidas, pedidos de explicacao e frases interrogativas devem ser ANSWER_APP_QUESTION, mesmo quando mencionarem publicar, gerar, cancelar ou alterar. CHANGE_ASSIGNMENTS representa ordens pontuais para colocar, retirar ou trocar corretores em uma ou varias janelas. Para cada mudanca, extraia localName, dayOfWeek (MONDAY a SUNDAY), startHour numerico quando informado, timeLabel quando informado, currentBrokerName quando informado e newBrokerName; para retirar deixe newBrokerName nulo. Nao invente detalhes ausentes. Outras acoes operacionais: CHECK_UNAVAILABILITY, GENERATE_AND_PUBLISH, EXPLAIN_FAIRNESS, REGENERATE_MORE_BALANCED, INVESTIGATE_BENEFIT_AND_REGENERATE e CANCEL_PUBLICATION. Use ANSWER_APP_QUESTION para qualquer duvida sobre o app e HELP apenas para mensagens sem sentido. Retorne somente um objeto json valido com action, focusBrokerName, shortReason e changes.",
     user: command,
     schema: {
       type: "OBJECT",
@@ -26,6 +28,7 @@ async function interpretCommand(command: string) {
             "INVESTIGATE_BENEFIT_AND_REGENERATE",
             "CANCEL_PUBLICATION",
             "CHANGE_ASSIGNMENTS",
+            "ANSWER_APP_QUESTION",
             "HELP"
           ]
         },
@@ -58,6 +61,7 @@ async function interpretCommand(command: string) {
     "INVESTIGATE_BENEFIT_AND_REGENERATE",
     "CANCEL_PUBLICATION",
     "CHANGE_ASSIGNMENTS",
+    "ANSWER_APP_QUESTION",
     "HELP"
   ]);
   return {
@@ -84,6 +88,56 @@ function reviewText(review: any) {
     review.conflicts ? `Conflitos: ${review.conflicts}` : null,
     review.error ? `Erro da IA: ${review.error}` : null
   ].filter(Boolean).join("\n");
+}
+
+async function buildAppAssistantContext(): Promise<AppAssistantContext> {
+  const workflow = weeklyWorkflowStatus();
+  const [brokers, nextImport, currentSchedule, nextSchedule, priorities, confirmations] = await Promise.all([
+    prisma.broker.findMany({ include: { team: true } }),
+    prisma.scheduleImport.findFirst({ where: { weekStart: workflow.weekStartDate }, orderBy: { createdAt: "desc" } }),
+    prisma.schedule.findFirst({
+      where: { weekStart: workflow.currentWeekStartDate, status: "PUBLISHED" },
+      include: { assignments: { include: { manualAlerts: true } } },
+      orderBy: { publishedAt: "desc" }
+    }),
+    prisma.schedule.findFirst({ where: { weekStart: workflow.weekStartDate, status: "PUBLISHED" }, select: { id: true } }),
+    prisma.dutyPriority.findMany({ orderBy: [{ position: "asc" }, { localName: "asc" }] }),
+    prisma.unavailabilityConfirmation.findMany({ where: { weekStart: workflow.weekStartDate }, select: { brokerId: true } })
+  ]);
+  const activeFerreira = brokers.filter((broker) => broker.active && broker.team.isFerreira);
+  const currentAssignments = currentSchedule?.assignments ?? [];
+  return {
+    workflow: {
+      isOpen: workflow.isOpen,
+      currentWeekStart: workflow.currentWeekStart,
+      currentWeekEnd: workflow.currentWeekEnd,
+      nextWeekStart: workflow.weekStart,
+      nextWeekEnd: workflow.weekEnd,
+      opensOn: workflow.opensOn,
+      daysUntilOpen: workflow.daysUntilOpen
+    },
+    brokers: {
+      activeFerreira: activeFerreira.length,
+      inactiveFerreira: brokers.filter((broker) => !broker.active && broker.team.isFerreira).length,
+      authorizedForExternal: activeFerreira.filter((broker) => broker.canExternalDuty).length
+    },
+    nextWeek: {
+      availabilityConfirmed: new Set(confirmations.map((item) => item.brokerId)).size,
+      availabilityTotal: activeFerreira.length,
+      importStatus: nextImport?.status ?? "NOT_SENT",
+      importFileName: nextImport?.fileName ?? null,
+      published: Boolean(nextSchedule)
+    },
+    currentWeek: {
+      published: Boolean(currentSchedule),
+      totalAssignments: currentAssignments.length,
+      ferreiraAssignments: currentAssignments.filter((item) => item.assignmentType !== "EXTERNAL_IMPORTED").length,
+      externalImportedAssignments: currentAssignments.filter((item) => item.assignmentType === "EXTERNAL_IMPORTED").length,
+      uncoveredAssignments: currentAssignments.filter((item) => item.assignmentType !== "EXTERNAL_IMPORTED" && !item.brokerId).length,
+      alerts: currentAssignments.reduce((total, item) => total + item.manualAlerts.length + (item.isViolation ? 1 : 0), 0)
+    },
+    priorities: priorities.map((item) => item.localName)
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -114,7 +168,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const intent = await interpretCommand(command);
+    const directAction = directOperationalAction(command);
+    const intent = directAction
+      ? { action: directAction, focusBrokerName: null, shortReason: "Ordem operacional inequívoca.", changes: [] }
+      : await interpretCommand(command);
 
     if (intent.action === "CHANGE_ASSIGNMENTS") {
       const result = await analyzeScheduleChangeRequest(weekStart, command, intent.changes);
@@ -198,6 +255,15 @@ export async function POST(request: NextRequest) {
         intent,
         message: `IA:\n${reviewText(schedule?.aiReview)}`,
         data: { aiReview: schedule?.aiReview ?? null }
+      });
+    }
+
+    if (intent.action === "ANSWER_APP_QUESTION" || intent.action === "HELP") {
+      const answer = await answerAppQuestion(command, await buildAppAssistantContext());
+      return NextResponse.json({
+        intent,
+        message: `IA: ${answer}`,
+        data: { informational: true }
       });
     }
 
