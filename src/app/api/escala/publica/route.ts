@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPublishedSchedule } from "@/lib/data";
 import { requireUser } from "@/lib/auth";
-import { formatWeekStart, normalizeWeekStart } from "@/lib/constants";
+import { formatWeekStart } from "@/lib/constants";
+import { currentSaoPauloWeekStart } from "@/lib/deadlines";
 
 export async function GET(request: NextRequest) {
   const auth = await requireUser(request);
   if ("error" in auth) return auth.error;
   const requestedWeekStart = request.nextUrl.searchParams.get("weekStart") ?? undefined;
   const isBroker = auth.user.role === "BROKER";
-  const weekStart = isBroker ? formatWeekStart(normalizeWeekStart()) : requestedWeekStart;
+  const weekStart = isBroker ? formatWeekStart(currentSaoPauloWeekStart()) : requestedWeekStart;
   const ferreiraOnly = request.nextUrl.searchParams.get("ferreiraOnly") === "1";
   return NextResponse.json(await getPublishedSchedule(weekStart, { ferreiraOnly }));
 }

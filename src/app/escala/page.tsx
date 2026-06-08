@@ -7,6 +7,7 @@ import { SpreadsheetScheduleGrid } from "@/components/SpreadsheetScheduleGrid";
 import { AiReviewCard } from "@/components/AiReviewCard";
 import { ScheduleChangeNotices } from "@/components/ScheduleChangeNotices";
 import { normalizeWeekStart } from "@/lib/constants";
+import { currentSaoPauloWeekStart } from "@/lib/deadlines";
 
 type PublicData = {
   salesMonthLabel?: string;
@@ -32,10 +33,8 @@ type PublicData = {
   }>;
 };
 
-function nextPlanningWeekStart() {
-  const today = new Date();
-  const nextWeek = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 7));
-  return normalizeWeekStart(nextWeek).toISOString().slice(0, 10);
+function currentWeekStart() {
+  return currentSaoPauloWeekStart().toISOString().slice(0, 10);
 }
 
 function normalizeWeekInput(value: string) {
@@ -45,7 +44,7 @@ function normalizeWeekInput(value: string) {
 export default function SalesRankingPage() {
   const [data, setData] = useState<PublicData | null>(null);
   const [me, setMe] = useState<any>(null);
-  const [weekStart, setWeekStart] = useState(nextPlanningWeekStart());
+  const [weekStart, setWeekStart] = useState(currentWeekStart());
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {

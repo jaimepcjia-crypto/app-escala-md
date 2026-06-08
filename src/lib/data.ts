@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData, managerInitialEmail } from "@/lib/seed";
 import { formatWeekStart, normalizeWeekStart, type DayOfWeek, type Shift } from "@/lib/constants";
-import { addDays, dateForWeekDay, dateOnly, dayOfWeekForDate, defaultAiScheduleWeek, generationWindowStatus, parseDateOnly, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { addDays, currentSaoPauloWeekStart, dateForWeekDay, dateOnly, dayOfWeekForDate, defaultAiScheduleWeek, generationWindowStatus, parseDateOnly, weeklyWorkflowStatus } from "@/lib/deadlines";
 
 export function salesMonthStartForWeek(weekStart: Date) {
   return new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), 1));
@@ -239,7 +239,7 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
 
 export async function getPublishedSchedule(weekStartInput?: string, options: { ferreiraOnly?: boolean } = {}) {
   await ensureSeedData();
-  const weekStart = normalizeWeekStart(weekStartInput);
+  const weekStart = weekStartInput ? normalizeWeekStart(weekStartInput) : currentSaoPauloWeekStart();
   const salesPeriod = currentSaoPauloSalesPeriod();
   const schedule = await prisma.schedule.findFirst({
     where: { weekStart, status: "PUBLISHED" },
