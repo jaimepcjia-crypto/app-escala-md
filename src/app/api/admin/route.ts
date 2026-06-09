@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSnapshot, reaisToCents, salesMonthStartForWeek } from "@/lib/data";
 import { weeklyWorkflowStatus } from "@/lib/deadlines";
 import { isValidEmail, isValidNumericPassword, normalizeEmail, numericPasswordError, passwordCredentialData, requireManager, verifyPassword } from "@/lib/auth";
+import { brokerIdentityChanged } from "@/lib/availability-readiness";
 
 export async function GET(request: NextRequest) {
   const auth = await requireManager(request);
@@ -30,6 +31,8 @@ export async function POST(request: NextRequest) {
     if (existing) return NextResponse.json({ error: "Ja existe outro corretor com este nome." }, { status: 409 });
     const existingEmail = await prisma.user.findFirst({ where: { email, brokerId: { not: brokerId } } });
     if (existingEmail) return NextResponse.json({ error: "Ja existe uma conta com este email." }, { status: 409 });
+    const identityChanged = brokerIdentityChanged(target.name, name);
+    const nextWeekStart = weeklyWorkflowStatus().weekStartDate;
     const broker = await prisma.$transaction(async (tx) => {
       const updated = await tx.broker.update({
         where: { id: brokerId },
@@ -44,9 +47,13 @@ export async function POST(request: NextRequest) {
         // senha só muda se vier preenchida (numérica); grava hash + texto p/ exibição
         data: { email, ...(password ? passwordCredentialData(password) : {}) }
       });
+      if (identityChanged) {
+        await tx.unavailabilityConfirmation.deleteMany({ where: { brokerId, weekStart: { gte: nextWeekStart } } });
+        await tx.unavailability.deleteMany({ where: { brokerId, date: { gte: nextWeekStart } } });
+      }
       return updated;
     });
-    return NextResponse.json({ broker });
+    return NextResponse.json({ broker, futureAvailabilityReset: identityChanged });
   }
 
   if (body.action === "deleteBroker") {

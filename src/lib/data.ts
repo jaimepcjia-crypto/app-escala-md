@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureSeedData, managerInitialEmail } from "@/lib/seed";
 import { formatWeekStart, normalizeWeekStart, type DayOfWeek, type Shift } from "@/lib/constants";
 import { addDays, currentSaoPauloWeekStart, dateForWeekDay, dateOnly, dayOfWeekForDate, defaultAiScheduleWeek, generationWindowStatus, parseDateOnly, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { availabilityReadiness } from "@/lib/availability-readiness";
 
 export function salesMonthStartForWeek(weekStart: Date) {
   return new Date(Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), 1));
@@ -200,6 +201,7 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
     .sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999) || left.name.localeCompare(right.name));
   const ferreiraBrokers = brokers.filter((broker) => broker.team.isFerreira && broker.active);
   const confirmedBrokerIds = new Set(confirmations.map((item) => item.brokerId));
+  const readiness = availabilityReadiness(ferreiraBrokers.map((broker) => broker.id), [...confirmedBrokerIds]);
   const confirmedImport = imports.find((item) => item.status === "CONFIRMED") ?? imports[0] ?? null;
   const importedLocalNames = confirmedImport?.cells.map((cell) => cell.localName ?? "").filter(Boolean) ?? [];
   const rememberedLocalNames = [
@@ -226,9 +228,9 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
     weights: [],
     plantaoPriorities,
     readiness: {
-      totalFerreiraBrokers: ferreiraBrokers.length,
-      confirmed: ferreiraBrokers.filter((broker) => confirmedBrokerIds.has(broker.id)).length,
-      allConfirmed: ferreiraBrokers.length > 0 && ferreiraBrokers.every((broker) => confirmedBrokerIds.has(broker.id))
+      totalFerreiraBrokers: readiness.total,
+      confirmed: readiness.confirmed,
+      allConfirmed: readiness.allConfirmed
     },
     generationGate: generationWindowStatus(weekStart)
     ,

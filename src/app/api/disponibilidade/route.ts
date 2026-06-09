@@ -4,6 +4,7 @@ import { ensureSeedData } from "@/lib/seed";
 import { requireUser } from "@/lib/auth";
 import { currentSaoPauloDate, currentSaoPauloWeekStart, dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { normalizeWeekStart } from "@/lib/constants";
+import { availabilityReadiness } from "@/lib/availability-readiness";
 
 function uniqueDates(dates: Date[]) {
   return [...new Map(dates.map((date) => [dateOnly(date), date])).values()];
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
 
   const visibleBrokerIds = new Set(brokers.map((broker) => broker.id));
   const filteredUnavailabilities = unavailabilities.filter((item) => visibleBrokerIds.has(item.brokerId));
+  const nextWeekReadiness = availabilityReadiness(activeFerreiraBrokers.map((broker) => broker.id), nextWeekConfirmations.map((item) => item.brokerId));
 
   const days = monthDays(month);
   const publishedSet = await publishedWeekKeys(days);
@@ -86,8 +88,8 @@ export async function GET(request: NextRequest) {
       nextWeekAvailability: {
         weekStart: workflow.weekStart,
         weekEnd: workflow.weekEnd,
-        confirmed: new Set(nextWeekConfirmations.map((item) => item.brokerId)).size,
-        total: activeFerreiraBrokers.length
+        confirmed: nextWeekReadiness.confirmed,
+        total: nextWeekReadiness.total
       }
     },
     brokers,
