@@ -78,7 +78,7 @@ export function WeeklyScheduleAgenda({
           <button className="action-secondary whitespace-nowrap" onClick={clearFilters}><X size={14} /> Limpar</button>
         </div>
         <div className="ui-font mt-3 flex flex-wrap items-center gap-4 text-[11px] text-graphite">
-          <Legend color="bg-sand" label="Equipe Ferreira · destaque pulsante" />
+          <Legend color="bg-[#3b1761]" label="Equipe Ferreira · roxo pulsante" />
           <Legend color="bg-steel" label="Definido no arquivo" />
           <Legend color="bg-signal" label="Alerta ou mudança" />
         </div>
@@ -161,7 +161,7 @@ function AssignmentLine({ assignment, brokerId, query }: { assignment: AgendaAss
   const ferreira = assignment.assignmentType !== "EXTERNAL_IMPORTED";
   const match = Boolean(query.trim() && name.toLocaleLowerCase("pt-BR").includes(query.trim().toLocaleLowerCase("pt-BR")));
   const appearance = ferreira
-    ? "ferreira-pulse border-sand text-black font-black"
+    ? "ferreira-pulse border-[#b58be8] text-white font-black"
     : alert
       ? "border-signal bg-signal/10 font-bold"
       : "border-steel/25 bg-steel/10 font-semibold";
@@ -174,7 +174,7 @@ function AssignmentLine({ assignment, brokerId, query }: { assignment: AgendaAss
       title={warnings.join(" | ") || (managerChange ? "Mudança confirmada pelo gerente via IA." : undefined)}
     >
       <span className="min-w-0 flex-1 break-words">{name}</span>
-      {alert ? <AlertTriangle className="shrink-0 text-signal" size={11} /> : mine ? <Sparkles className="shrink-0 text-black" size={11} /> : null}
+      {alert ? <AlertTriangle className="shrink-0 text-signal" size={11} /> : mine ? <Sparkles className="shrink-0 text-white" size={11} /> : null}
     </div>
   );
 }
