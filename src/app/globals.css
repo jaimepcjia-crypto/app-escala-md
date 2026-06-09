@@ -121,9 +121,28 @@ details > summary::-webkit-details-marker {
   animation: ferreira-gold-pulse 2.2s ease-in-out infinite;
 }
 
+@keyframes broker-deadline-pulse {
+  0%, 100% {
+    background-color: rgba(166, 75, 50, 0.12);
+    box-shadow: 0 0 0 rgba(210, 169, 86, 0);
+  }
+  50% {
+    background-color: rgba(166, 75, 50, 0.28);
+    box-shadow: 0 0 16px rgba(210, 169, 86, 0.22);
+  }
+}
+
+.broker-deadline-alert {
+  animation: broker-deadline-pulse 2.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ferreira-pulse {
+  .ferreira-pulse,
+  .broker-deadline-alert {
     animation: none;
+  }
+
+  .ferreira-pulse {
     background-color: rgba(226, 186, 96, 0.82);
   }
 }

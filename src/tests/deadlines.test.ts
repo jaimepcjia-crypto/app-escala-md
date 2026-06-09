@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { defaultAiScheduleWeek, generationWindowStatus, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { brokerAvailabilityAlertStatus, defaultAiScheduleWeek, generationWindowStatus, nextAvailabilityDeadline, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 
 it("allows dates from today through the next 12 months", () => {
   const now = new Date("2026-06-03T15:00:00.000Z");
@@ -30,4 +30,21 @@ it("allows generation only for the immediate next week during the weekend", () =
 it("targets current schedule on weekdays and next schedule on weekends for AI changes", () => {
   expect(defaultAiScheduleWeek(new Date("2026-06-03T15:00:00.000Z")).toISOString().slice(0, 10)).toBe("2026-06-01");
   expect(defaultAiScheduleWeek(new Date("2026-06-06T15:00:00.000Z")).toISOString().slice(0, 10)).toBe("2026-06-08");
+});
+
+it("counts broker availability deadline down to Saturday midnight in Sao Paulo", () => {
+  const tuesday = nextAvailabilityDeadline(new Date("2026-06-09T11:00:00.000Z"));
+  expect(tuesday.fridayDate.toISOString().slice(0, 10)).toBe("2026-06-12");
+  expect(tuesday.deadline.toISOString()).toBe("2026-06-13T03:00:00.000Z");
+
+  const saturday = nextAvailabilityDeadline(new Date("2026-06-13T15:00:00.000Z"));
+  expect(saturday.fridayDate.toISOString().slice(0, 10)).toBe("2026-06-19");
+  expect(saturday.deadline.toISOString()).toBe("2026-06-20T03:00:00.000Z");
+});
+
+it("shows the broker deadline alert only from Monday 08:00 through Friday in Sao Paulo", () => {
+  expect(brokerAvailabilityAlertStatus(new Date("2026-06-13T02:59:59.000Z")).visible).toBe(true);
+  expect(brokerAvailabilityAlertStatus(new Date("2026-06-13T03:00:00.000Z")).visible).toBe(false);
+  expect(brokerAvailabilityAlertStatus(new Date("2026-06-15T10:59:59.000Z")).visible).toBe(false);
+  expect(brokerAvailabilityAlertStatus(new Date("2026-06-15T11:00:00.000Z")).visible).toBe(true);
 });

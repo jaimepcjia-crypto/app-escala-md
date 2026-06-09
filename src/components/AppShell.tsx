@@ -1,9 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, CalendarDays, ClipboardList, LogOut, Shield } from "lucide-react";
+import { AlertCircle, BarChart3, CalendarDays, ClipboardList, LogOut, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { authenticatedFetch, clearTabSessionToken, setTabSessionToken } from "@/lib/client-auth";
+import { brokerAvailabilityAlertStatus } from "@/lib/deadlines";
+
+function formatDeadlineDate(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(date);
+}
+
+function BrokerAvailabilityAlert() {
+  const [now, setNow] = useState(() => new Date());
+  const deadline = useMemo(() => brokerAvailabilityAlertStatus(now), [now]);
+  const remainingSeconds = Math.max(0, Math.floor((deadline.deadline.getTime() - now.getTime()) / 1000));
+  const hours = Math.floor(remainingSeconds / 3600);
+  const minutes = Math.floor((remainingSeconds % 3600) / 60);
+  const seconds = remainingSeconds % 60;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!deadline.visible) return <div className="hidden flex-1 lg:block" />;
+
+  return (
+    <div className="broker-deadline-alert ui-font flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-sand/45 px-3 py-2 text-paper lg:max-w-[620px]">
+      <AlertCircle className="shrink-0 text-sand" size={20} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-black uppercase tracking-[0.12em] text-sand">
+          Revise suas indisponibilidades até sexta-feira, {formatDeadlineDate(deadline.fridayDate)}
+        </p>
+        <p className="mt-0.5 text-[11px] leading-snug text-paper/80">
+          Às 00:00 de sábado o gerente já poderá publicar a escala. Depois desse horário, sua correção pode chegar tarde.
+        </p>
+      </div>
+      <div className="shrink-0 rounded-lg bg-black/30 px-2.5 py-1.5 text-center">
+        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-paper/65">Tempo restante</span>
+        <strong className="tabular-nums text-sm text-sand">
+          {String(hours).padStart(2, "0")}h {String(minutes).padStart(2, "0")}m {String(seconds).padStart(2, "0")}s
+        </strong>
+      </div>
+    </div>
+  );
+}
 
 export function AppShell({ children, active }: { children: React.ReactNode; active: "admin" | "disponibilidade" | "escala" }) {
   const [role, setRole] = useState<string | null>(null);
@@ -47,8 +93,8 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   return (
     <main className="min-h-screen px-3 py-4 text-ink sm:px-5 lg:px-6">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
-        <header className="flex flex-col gap-4 rounded-[24px] bg-ink p-4 text-paper shadow-panel lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
+        <header className="flex flex-col gap-4 rounded-[24px] bg-ink p-4 text-paper shadow-panel lg:flex-row lg:items-center">
+          <div className="flex shrink-0 items-center gap-3">
             <div className="grid h-12 w-12 place-items-center rounded-full border border-sand/50 bg-paper/5 text-sand">
               <CalendarDays size={24} />
             </div>
@@ -57,7 +103,8 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
               <h1 className="text-2xl font-semibold leading-tight sm:text-3xl">Escala inteligente do Ferreira</h1>
             </div>
           </div>
-          <nav className="ui-font flex flex-wrap gap-2">
+          {role === "BROKER" ? <BrokerAvailabilityAlert /> : <div className="hidden flex-1 lg:block" />}
+          <nav className="ui-font flex shrink-0 flex-wrap gap-2">
             {links.map((link) => {
               const Icon = link.icon;
               const selected = active === link.key;

@@ -77,6 +77,46 @@ export function nextSaoPauloWeekStart(now = new Date()) {
   return addDays(currentSaoPauloWeekStart(now), 7);
 }
 
+function saoPauloMidnightInstant(date: Date) {
+  const target = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  let instant = target;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parts = saoPauloParts(new Date(instant));
+    const represented = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    instant = target - (represented - instant);
+  }
+  return new Date(instant);
+}
+
+export function nextAvailabilityDeadline(now = new Date()) {
+  const today = currentSaoPauloDate(now);
+  const day = dayOfWeekForDate(today);
+  const daysUntilSaturday = day === "SATURDAY"
+    ? 7
+    : day === "SUNDAY"
+      ? 6
+      : 5 - dayOffset[day];
+  const saturdayDate = addDays(today, daysUntilSaturday);
+  return {
+    fridayDate: addDays(saturdayDate, -1),
+    saturdayDate,
+    deadline: saoPauloMidnightInstant(saturdayDate)
+  };
+}
+
+export function brokerAvailabilityAlertStatus(now = new Date()) {
+  const parts = saoPauloParts(now);
+  const today = currentSaoPauloDate(now);
+  const day = dayOfWeekForDate(today);
+  const visible = day !== "SATURDAY"
+    && day !== "SUNDAY"
+    && (day !== "MONDAY" || parts.hour >= 8);
+  return {
+    visible,
+    ...nextAvailabilityDeadline(now)
+  };
+}
+
 export function isInsideRange(date: Date, start: Date, end: Date) {
   return date >= start && date <= end;
 }
