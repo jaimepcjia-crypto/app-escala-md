@@ -47,6 +47,11 @@ export function assignmentWarnings(assignment: AgendaAssignment) {
   ].filter((warning): warning is string => Boolean(warning));
 }
 
+export function filterAssignmentsByBroker(assignments: AgendaAssignment[], brokerId: string) {
+  if (!brokerId) return assignments;
+  return assignments.filter((assignment) => assignment.broker?.id === brokerId);
+}
+
 function timeOrder(assignment: AgendaAssignment) {
   if (assignment.startHour !== null && assignment.startHour !== undefined) return assignment.startHour * 60;
   const value = assignmentTime(assignment).toLowerCase();

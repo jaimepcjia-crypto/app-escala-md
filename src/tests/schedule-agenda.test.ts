@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { agendaStats, assignmentName, buildScheduleGrid, buildWeeklyAgenda, type AgendaAssignment } from "@/lib/schedule-agenda";
+import { agendaStats, assignmentName, buildScheduleGrid, buildWeeklyAgenda, filterAssignmentsByBroker, type AgendaAssignment } from "@/lib/schedule-agenda";
 
 function assignment(patch: Partial<AgendaAssignment> & Pick<AgendaAssignment, "id">): AgendaAssignment {
   return {
@@ -64,4 +64,15 @@ it("groups the modern grid by local, day and time without duplicating assignment
   expect(grid[0].days[0].times[0].assignments.map((item) => item.id)).toEqual(["ana", "bruno"]);
   expect(ids).toHaveLength(items.length);
   expect(new Set(ids).size).toBe(items.length);
+});
+
+it("filters the schedule to one registered broker", () => {
+  const items = [
+    assignment({ id: "ana", broker: { id: "broker-ana", name: "Ana" } }),
+    assignment({ id: "bruno", broker: { id: "broker-bruno", name: "Bruno" } }),
+    assignment({ id: "external", assignmentType: "EXTERNAL_IMPORTED", sourceText: "Nome importado", broker: null })
+  ];
+
+  expect(filterAssignmentsByBroker(items, "broker-ana").map((item) => item.id)).toEqual(["ana"]);
+  expect(filterAssignmentsByBroker(items, "")).toEqual(items);
 });

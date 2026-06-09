@@ -7,6 +7,7 @@ import {
   assignmentName,
   assignmentWarnings,
   buildScheduleGrid,
+  filterAssignmentsByBroker,
   type AgendaAssignment
 } from "@/lib/schedule-agenda";
 
@@ -24,10 +25,24 @@ export function WeeklyScheduleAgenda({
   isManager: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [brokerFilter, setBrokerFilter] = useState("");
   const [localFilter, setLocalFilter] = useState("");
   const [dayFilter, setDayFilter] = useState("");
   const [mobileDay, setMobileDay] = useState("MONDAY");
-  const grid = useMemo(() => buildScheduleGrid(assignments), [assignments]);
+  const brokers = useMemo(() => {
+    const unique = new Map<string, string>();
+    for (const assignment of assignments) {
+      if (assignment.broker) unique.set(assignment.broker.id, assignment.broker.name);
+    }
+    return [...unique.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+  }, [assignments]);
+  const filteredAssignments = useMemo(
+    () => filterAssignmentsByBroker(assignments, brokerFilter),
+    [assignments, brokerFilter]
+  );
+  const grid = useMemo(() => buildScheduleGrid(filteredAssignments), [filteredAssignments]);
   const locals = grid.map((group) => group.local);
   const visibleGrid = localFilter ? grid.filter((group) => group.local === localFilter) : grid;
   const visibleDays = dayFilter ? DAYS.filter((day) => day.key === dayFilter) : DAYS;
@@ -35,6 +50,7 @@ export function WeeklyScheduleAgenda({
 
   function clearFilters() {
     setQuery("");
+    setBrokerFilter("");
     setLocalFilter("");
     setDayFilter("");
   }
@@ -42,11 +58,15 @@ export function WeeklyScheduleAgenda({
   return (
     <div className="grid gap-4">
       <section className="panel rounded-2xl p-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_240px_190px_auto]">
+        <div className="grid gap-3 lg:grid-cols-[minmax(240px,1fr)_220px_220px_180px_auto]">
           <label className="ui-font relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-graphite" size={15} />
             <input className="control w-full rounded-xl py-2 pl-9 pr-3 text-sm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar corretor ou nome no plantão" />
           </label>
+          <select className="control rounded-xl px-3 py-2 text-sm" value={brokerFilter} onChange={(event) => setBrokerFilter(event.target.value)}>
+            <option value="">Todos os corretores</option>
+            {brokers.map((broker) => <option key={broker.id} value={broker.id}>{broker.name}</option>)}
+          </select>
           <select className="control rounded-xl px-3 py-2 text-sm" value={localFilter} onChange={(event) => setLocalFilter(event.target.value)}>
             <option value="">Todos os locais</option>
             {locals.map((local) => <option key={local} value={local}>{local}</option>)}
@@ -88,6 +108,11 @@ export function WeeklyScheduleAgenda({
             </div>
           </section>
         ))}
+        {!visibleGrid.length ? (
+          <div className="ui-font rounded-2xl border border-graphite/15 bg-paper p-6 text-center text-sm text-graphite">
+            Nenhum plantão encontrado para os filtros selecionados.
+          </div>
+        ) : null}
       </div>
     </div>
   );
