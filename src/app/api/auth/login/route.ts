@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createSessionToken, normalizeEmail, setSessionCookie, verifyPassword } from "@/lib/auth";
+import { createSessionToken, normalizeEmail, passwordCredentialData, setSessionCookie, verifyStoredPassword } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -11,8 +11,12 @@ export async function POST(request: NextRequest) {
     include: { broker: { include: { team: true } } }
   });
 
-  if (!user || !verifyPassword(password, user.passwordHash)) {
+  const verification = user ? verifyStoredPassword(password, user) : null;
+  if (!user || !verification?.valid) {
     return NextResponse.json({ error: "Email ou senha invalidos." }, { status: 401 });
+  }
+  if (verification.needsHashRepair) {
+    await prisma.user.update({ where: { id: user.id }, data: passwordCredentialData(password) });
   }
 
   const response = NextResponse.json({

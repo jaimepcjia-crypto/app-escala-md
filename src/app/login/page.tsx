@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LogIn } from "lucide-react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   // URL de acesso pessoal (.../login?email=...) pré-preenche o e-mail; a senha é digitada.
@@ -53,14 +54,21 @@ export default function LoginPage() {
           </label>
           <label className="ui-font text-sm font-bold">
             Senha
-            <input
-              className="control mt-1 w-full rounded-md px-3 py-2"
-              type="password"
-              inputMode="numeric"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              data-help="Informe sua senha numerica."
-            />
+            <span className="relative mt-1 block">
+              <input
+                className="control w-full rounded-md px-3 py-2 pr-11"
+                type={showPassword ? "text" : "password"}
+                inputMode="numeric"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                data-help="Informe sua senha numerica."
+              />
+              <button type="button" className="absolute inset-y-0 right-0 grid w-11 place-items-center text-graphite" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </span>
+            <span className="mt-1 block text-[10px] font-normal text-graphite">{password.length ? `${password.length} dígito(s) informado(s)` : "Senha numérica de 4 a 10 dígitos"}</span>
           </label>
           <button className="action-primary py-3" onClick={login} data-help="Entra no app com este email e senha.">
             <LogIn size={18} />

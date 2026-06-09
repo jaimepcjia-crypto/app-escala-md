@@ -33,6 +33,10 @@ export function hashPassword(password: string) {
   return `pbkdf2$${iterations}$${salt}$${hash}`;
 }
 
+export function passwordCredentialData(password: string) {
+  return { passwordHash: hashPassword(password), passwordPlain: password };
+}
+
 export function verifyPassword(password: string, encoded: string) {
   const [kind, iterationsText, salt, expected] = encoded.split("$");
   if (kind !== "pbkdf2" || !iterationsText || !salt || !expected) return false;
@@ -41,6 +45,14 @@ export function verifyPassword(password: string, encoded: string) {
   const expectedBuffer = Buffer.from(expected, "hex");
   if (actualBuffer.length !== expectedBuffer.length) return false;
   return timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+export function verifyStoredPassword(password: string, user: { passwordHash: string; passwordPlain?: string | null }) {
+  const hashMatches = verifyPassword(password, user.passwordHash);
+  return {
+    valid: hashMatches || Boolean(user.passwordPlain && password === user.passwordPlain),
+    needsHashRepair: !hashMatches && Boolean(user.passwordPlain && password === user.passwordPlain)
+  };
 }
 
 function sign(payload: string) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSnapshot, reaisToCents, salesMonthStartForWeek } from "@/lib/data";
 import { weeklyWorkflowStatus } from "@/lib/deadlines";
-import { hashPassword, isValidEmail, isValidNumericPassword, normalizeEmail, numericPasswordError, requireManager, verifyPassword } from "@/lib/auth";
+import { isValidEmail, isValidNumericPassword, normalizeEmail, numericPasswordError, passwordCredentialData, requireManager, verifyPassword } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const auth = await requireManager(request);
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       await tx.user.update({
         where: { brokerId },
         // senha só muda se vier preenchida (numérica); grava hash + texto p/ exibição
-        data: { email, ...(password ? { passwordHash: hashPassword(password), passwordPlain: password } : {}) }
+        data: { email, ...(password ? passwordCredentialData(password) : {}) }
       });
       return updated;
     });
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     }
     await prisma.user.update({
       where: { id: manager.id },
-      data: { passwordHash: hashPassword(newPassword), passwordPlain: newPassword }
+      data: passwordCredentialData(newPassword)
     });
     return NextResponse.json({ ok: true });
   }
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Login do corretor nao encontrado." }, { status: 404 });
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: hashPassword(newPassword), passwordPlain: newPassword }
+      data: passwordCredentialData(newPassword)
     });
     return NextResponse.json({ ok: true });
   }
@@ -158,8 +158,7 @@ export async function POST(request: NextRequest) {
       await tx.user.create({
         data: {
           email,
-          passwordHash: hashPassword(initialPassword),
-          passwordPlain: initialPassword,
+          ...passwordCredentialData(initialPassword),
           role: "BROKER",
           brokerId: created.id
         }
