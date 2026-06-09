@@ -23,6 +23,9 @@ export async function POST(request: NextRequest) {
     if (!name) return NextResponse.json({ error: "Informe o nome do corretor." }, { status: 400 });
     if (!isValidEmail(email)) return NextResponse.json({ error: "Informe um email valido para o corretor." }, { status: 400 });
     if (password && !isValidNumericPassword(password)) return NextResponse.json({ error: numericPasswordError() }, { status: 400 });
+    const target = await prisma.broker.findUnique({ where: { id: brokerId }, include: { user: true } });
+    if (!target) return NextResponse.json({ error: "Corretor nao encontrado para atualizacao." }, { status: 404 });
+    if (!target.user) return NextResponse.json({ error: "Login do corretor nao encontrado para atualizacao." }, { status: 409 });
     const existing = await prisma.broker.findFirst({ where: { name, id: { not: brokerId } } });
     if (existing) return NextResponse.json({ error: "Ja existe outro corretor com este nome." }, { status: 409 });
     const existingEmail = await prisma.user.findFirst({ where: { email, brokerId: { not: brokerId } } });
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
           active: Boolean(body.active)
         }
       });
-      await tx.user.updateMany({
+      await tx.user.update({
         where: { brokerId },
         // senha só muda se vier preenchida (numérica); grava hash + texto p/ exibição
         data: { email, ...(password ? { passwordHash: hashPassword(password), passwordPlain: password } : {}) }

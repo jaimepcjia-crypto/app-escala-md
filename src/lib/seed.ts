@@ -37,6 +37,10 @@ export function managerInitialPassword() {
   return isValidNumericPassword(password) ? password : "1234";
 }
 
+export function shouldSeedInitialBrokers(existingBrokerUsers: number) {
+  return existingBrokerUsers === 0;
+}
+
 export async function ensureSeedData() {
   for (const team of teams) {
     await prisma.team.upsert({
@@ -71,6 +75,8 @@ export async function ensureSeedData() {
   });
 
   const ferreiraTeam = await prisma.team.findUniqueOrThrow({ where: { name: "Equipe Ferreira" } });
+  const existingBrokerUsers = await prisma.user.count({ where: { role: "BROKER", brokerId: { not: null } } });
+  if (!shouldSeedInitialBrokers(existingBrokerUsers)) return;
 
   for (const brokerSeed of initialBrokers) {
     const email = normalizeEmail(brokerSeed.email);
@@ -78,22 +84,6 @@ export async function ensureSeedData() {
       where: { email },
       include: { broker: true }
     });
-
-    if (existingUser?.broker) {
-      await prisma.broker.update({
-        where: { id: existingUser.broker.id },
-        data: {
-          teamId: ferreiraTeam.id,
-          canExternalDuty: true,
-          active: true
-        }
-      });
-      // backfill da senha em texto p/ exibir na aba DADOS (só se ainda não tiver)
-      if (!existingUser.passwordPlain) {
-        await prisma.user.update({ where: { id: existingUser.id }, data: { passwordPlain: brokerSeed.password } });
-      }
-      continue;
-    }
 
     const broker = await prisma.broker.upsert({
       where: { name: brokerSeed.name },

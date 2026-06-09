@@ -16,6 +16,7 @@ export const APP_KNOWLEDGE = [
   "O motor considera vendas/meritocracia, reservas nos melhores plantões, equilíbrio total, concentração por tipo de plantão, distribuição semanal, histórico, autorização externa e indisponibilidades.",
   "A aba Escala/Ranking mostra a escala publicada em grade semanal moderna, ranking, análise da publicação, avisos e histórico. Corretores Ferreira aparecem destacados em dourado.",
   "A escala publicada e seus avisos são visíveis para gerente e corretores. O histórico e os downloads XLSX permanecem disponíveis ao gerente.",
+  "A IA pode consultar o histórico de escalas publicadas por corretor, plantão e período. A interpretação extrai os filtros, mas a contagem é calculada diretamente nos registros publicados.",
   "De segunda a sexta, pedidos da IA sem semana explícita miram a escala em vigor. No sábado e domingo, miram por padrão a próxima escala publicada. O gerente pode dizer escala atual ou próxima escala."
 ];
 

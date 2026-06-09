@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth";
-import { aiScheduleWeekForCommand, generationWindowStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { aiScheduleWeekForCommand, currentSaoPauloDate, dateOnly, generationWindowStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { getAdminSnapshot } from "@/lib/data";
 import { requestLlmJson } from "@/lib/llm";
 import { generateAndPublishSchedule } from "@/lib/schedule-actions";
@@ -9,6 +9,59 @@ import { analyzeScheduleChangeRequest, decideScheduleChangeRequest, invalidatePe
 import { answerBrokerOperationalQuestion } from "@/lib/ai-operational-questions";
 import { answerAppQuestion, type AppAssistantContext } from "@/lib/app-assistant";
 import { directOperationalAction } from "@/lib/ai-command-intent";
+import { isHistoricalAssignmentQuestion, queryHistoricalAssignments, type HistoricalAssignmentFilters } from "@/lib/historical-assignments";
+
+function normalizedText(value: string) {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-zA-Z0-9]+/g, " ").trim().toLowerCase();
+}
+
+async function extractHistoricalFilters(command: string) {
+  const today = dateOnly(currentSaoPauloDate());
+  const [brokers, assignments] = await Promise.all([
+    prisma.broker.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
+    prisma.scheduleAssignment.findMany({
+      where: { schedule: { status: "PUBLISHED" }, assignmentType: { not: "EXTERNAL_IMPORTED" } },
+      select: { dutyType: { select: { name: true } }, importedCell: { select: { localName: true } } }
+    })
+  ]);
+  const brokerNames = brokers.map((item) => item.name);
+  const localNames = [...new Set(assignments.map((item) => item.importedCell?.localName || item.dutyType.name))].sort();
+  const result = await requestLlmJson<HistoricalAssignmentFilters & { needsClarification: boolean; clarification: string | null }>({
+    system:
+      `Extraia filtros para consultar o historico de plantoes publicados do App Escala MD. Hoje e ${today}. Corretores existentes: ${brokerNames.join(", ")}. Plantoes existentes: ${localNames.join(", ")}. brokerName e localName sao opcionais; nunca solicite esclarecimento apenas porque um deles foi omitido. Converta periodos relativos como ultimos 30 dias, ultimos 6 meses, este ano ou mes passado em startDate e endDate no formato YYYY-MM-DD. "Todo o historico" significa datas nulas e needsClarification false. Somente marque needsClarification true quando o usuario mencionar explicitamente um periodo, mas nao disser qual. Nao invente corretor, plantao ou periodo. Retorne somente um objeto json valido com brokerName, localName, startDate, endDate, needsClarification e clarification.`,
+    user: command,
+    schema: {
+      type: "OBJECT",
+      properties: {
+        brokerName: { type: "STRING" },
+        localName: { type: "STRING" },
+        startDate: { type: "STRING" },
+        endDate: { type: "STRING" },
+        needsClarification: { type: "BOOLEAN" },
+        clarification: { type: "STRING" }
+      },
+      required: ["brokerName", "localName", "startDate", "endDate", "needsClarification", "clarification"]
+    }
+  });
+  const value = result.parsed;
+  const validDate = (date: unknown) => typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  const normalizedCommand = normalizedText(command);
+  const brokerName = brokerNames.find((name) => normalizedCommand.includes(normalizedText(name))) ?? value.brokerName ?? null;
+  const localName = [...localNames].sort((left, right) => right.length - left.length).find((name) => normalizedCommand.includes(normalizedText(name))) ?? value.localName ?? null;
+  const allHistory = /\b(todo|todo o|desde o inicio)\s+(historico|periodo)\b/.test(normalizedCommand);
+  const vaguePeriod = /\b(por|em|durante)\s+(um|algum|certo)\s+periodo\b/.test(normalizedCommand);
+  const startDate = validDate(value.startDate);
+  const endDate = validDate(value.endDate);
+  const needsClarification = !allHistory && vaguePeriod && !startDate && !endDate;
+  return {
+    brokerName,
+    localName,
+    startDate: allHistory ? null : startDate,
+    endDate: allHistory ? null : endDate,
+    needsClarification,
+    clarification: needsClarification ? value.clarification || "Qual período você deseja consultar?" : null
+  };
+}
 
 async function interpretCommand(command: string) {
   const result = await requestLlmJson<{ action: string; focusBrokerName: string | null; shortReason: string; changes?: RequestedScheduleChange[] }>({
@@ -156,6 +209,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ...result, data: result });
     }
     if (!command) return NextResponse.json({ error: "Digite uma ordem para a IA." }, { status: 400 });
+
+    if (isHistoricalAssignmentQuestion(command)) {
+      const filters = await extractHistoricalFilters(command);
+      if (filters.needsClarification) {
+        return NextResponse.json({
+          intent: { action: "HISTORICAL_ASSIGNMENT_QUERY", focusBrokerName: filters.brokerName, shortReason: "Consulta histórica precisa de mais detalhes.", changes: [] },
+          state: "BLOCKED",
+          message: `IA: ${filters.clarification ?? "informe o período desejado para a consulta histórica."}`,
+          data: { filters }
+        });
+      }
+      const result = await queryHistoricalAssignments(filters);
+      return NextResponse.json({
+        intent: { action: "HISTORICAL_ASSIGNMENT_QUERY", focusBrokerName: filters.brokerName, shortReason: "Consulta calculada diretamente no histórico publicado.", changes: [] },
+        ...result,
+        data: "data" in result ? result.data : { filters }
+      });
+    }
 
     const operationalBrokers = await prisma.broker.findMany({ include: { team: true }, orderBy: { name: "asc" } });
     const operationalAnswer = answerBrokerOperationalQuestion(command, operationalBrokers);
