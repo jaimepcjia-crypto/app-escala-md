@@ -108,7 +108,9 @@ export function clearSessionCookie(response: NextResponse) {
 }
 
 export function getRequestSession(request: NextRequest) {
-  return readSessionToken(request.cookies.get(SESSION_COOKIE)?.value);
+  const authorization = request.headers.get("authorization");
+  const bearerToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  return readSessionToken(bearerToken ?? request.cookies.get(SESSION_COOKIE)?.value);
 }
 
 export async function getCurrentUserFromCookies() {

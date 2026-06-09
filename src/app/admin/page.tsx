@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, CheckCircle2, Clock3, Copy, Download, FileSpreadshe
 import { AppShell } from "@/components/AppShell";
 import { BrokersSalesPanel, accessUrlFor, type BrokerSnapshot, type BrokerSavePatch } from "@/components/BrokersSalesPanel";
 import { StatusPill } from "@/components/StatusPill";
+import { authenticatedDownload, authenticatedFetch } from "@/lib/client-auth";
 
 type Workflow = { isOpen: boolean; daysUntilOpen: number; currentWeekStart: string; currentWeekEnd: string; weekStart: string; weekEnd: string; opensOn: string; closesOn: string };
 type Snapshot = {
@@ -51,8 +52,8 @@ export default function AdminPage() {
     setBusy(true);
     try {
       const [snapRes, archRes] = await Promise.all([
-        fetch("/api/admin", { cache: "no-store" }),
-        fetch("/api/admin/archive", { cache: "no-store" })
+        authenticatedFetch("/api/admin", { cache: "no-store" }),
+        authenticatedFetch("/api/admin/archive", { cache: "no-store" })
       ]);
       if (snapRes.status === 401 || archRes.status === 401) return void (window.location.href = "/login");
       const [nextSnapshot, nextArchive] = await Promise.all([snapRes.json(), archRes.json()]);
@@ -74,7 +75,7 @@ export default function AdminPage() {
   }, []);
 
   async function postAdmin(payload: Record<string, unknown>) {
-    const response = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const response = await authenticatedFetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "Falha administrativa.");
     return data;
@@ -87,7 +88,7 @@ export default function AdminPage() {
       setNotice(`Validando ${file.name}...`);
       const formData = new FormData();
       formData.set("file", file);
-      const response = await fetch("/api/escala/importar", { method: "POST", body: formData });
+      const response = await authenticatedFetch("/api/escala/importar", { method: "POST", body: formData });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Falha ao validar o XLSX.");
       setNotice(`Arquivo validado: ${payload.summary.ferreiraWindows} janelas Ferreira e ${payload.summary.external} externas.`);
@@ -104,7 +105,7 @@ export default function AdminPage() {
     if (!window.confirm("Excluir o XLSX validado da proxima escala?")) return;
     try {
       setBusy(true);
-      const response = await fetch(`/api/escala/importar?importId=${encodeURIComponent(importId)}`, { method: "DELETE" });
+      const response = await authenticatedFetch(`/api/escala/importar?importId=${encodeURIComponent(importId)}`, { method: "DELETE" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Falha ao excluir arquivo.");
       setNotice("Arquivo excluido. Voce pode enviar outro XLSX.");
@@ -122,7 +123,7 @@ export default function AdminPage() {
     try {
       setIaBusy(true);
       setIaAnswer(`IA: processando "${command}"...`);
-      const response = await fetch("/api/ia/comando", {
+      const response = await authenticatedFetch("/api/ia/comando", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command, decision, requestId: iaPendingRequestId })
@@ -199,6 +200,14 @@ export default function AdminPage() {
     if (!archive?.managerEmail) return;
     await navigator.clipboard.writeText(accessUrlFor(archive.managerEmail));
     setNotice("Link do gerente copiado.");
+  }
+
+  async function downloadSchedule(schedule: ArchiveSchedule) {
+    try {
+      await authenticatedDownload(`/api/admin/archive/${schedule.id}/download`, `escala-${schedule.weekStart}.xlsx`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao baixar escala.");
+    }
   }
 
   const workflow = snapshot?.workflow;
@@ -294,7 +303,7 @@ export default function AdminPage() {
           </details>
           <details className="panel rounded-2xl p-4">
             <summary className="ui-font cursor-pointer font-bold">Histórico de escalas publicadas</summary>
-            <div className="mt-4 grid gap-2">{archive?.schedules.map((schedule) => <a key={schedule.id} className="ui-font flex items-center justify-between rounded-xl border border-graphite/10 bg-white/60 p-3 text-sm hover:border-sand" href={`/api/admin/archive/${schedule.id}/download`}><span><strong>Semana de {formatDate(schedule.weekStart)}</strong><span className="block text-xs text-graphite">{schedule.importFileName ?? "sem arquivo"} · publicada em {formatDate(schedule.publishedAt)}</span></span><Download size={16} /></a>)}</div>
+            <div className="mt-4 grid gap-2">{archive?.schedules.map((schedule) => <button type="button" key={schedule.id} className="ui-font flex items-center justify-between rounded-xl border border-graphite/10 bg-white/60 p-3 text-left text-sm hover:border-sand" onClick={() => void downloadSchedule(schedule)}><span><strong>Semana de {formatDate(schedule.weekStart)}</strong><span className="block text-xs text-graphite">{schedule.importFileName ?? "sem arquivo"} · publicada em {formatDate(schedule.publishedAt)}</span></span><Download size={16} /></button>)}</div>
           </details>
         </div>
       </div>

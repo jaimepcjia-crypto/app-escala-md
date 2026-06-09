@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { BarChart3, CalendarDays, ClipboardList, LogOut, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { authenticatedFetch, clearTabSessionToken, setTabSessionToken } from "@/lib/client-auth";
 
 export function AppShell({ children, active }: { children: React.ReactNode; active: "admin" | "disponibilidade" | "escala" }) {
   const [role, setRole] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
+    authenticatedFetch("/api/me", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
-      .then((payload) => setRole(payload?.user?.role ?? null))
+      .then((payload) => {
+        if (payload?.sessionToken) setTabSessionToken(payload.sessionToken);
+        setRole(payload?.user?.role ?? null);
+      })
       .catch(() => setRole(null));
   }, []);
 
@@ -33,8 +37,9 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   async function logout() {
     try {
       setLoggingOut(true);
-      await fetch("/api/auth/logout", { method: "POST" });
+      await authenticatedFetch("/api/auth/logout", { method: "POST" });
     } finally {
+      clearTabSessionToken();
       window.location.href = "/login";
     }
   }

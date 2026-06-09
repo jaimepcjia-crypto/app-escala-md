@@ -19,7 +19,9 @@ export async function POST(request: NextRequest) {
     await prisma.user.update({ where: { id: user.id }, data: passwordCredentialData(password) });
   }
 
+  const sessionToken = createSessionToken(user);
   const response = NextResponse.json({
+    sessionToken,
     user: {
       id: user.id,
       email: user.email,
@@ -27,6 +29,6 @@ export async function POST(request: NextRequest) {
       broker: user.broker
     }
   });
-  setSessionCookie(response, createSessionToken(user));
+  setSessionCookie(response, sessionToken);
   return response;
 }

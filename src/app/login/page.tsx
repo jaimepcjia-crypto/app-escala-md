@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
+import { setTabSessionToken } from "@/lib/client-auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -27,6 +28,7 @@ export default function LoginPage() {
       setError(data.error ?? "Falha no login.");
       return;
     }
+    setTabSessionToken(data.sessionToken);
     window.location.href = data.user.role === "MANAGER" ? "/admin" : "/escala";
   }
 

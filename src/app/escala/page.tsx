@@ -8,6 +8,7 @@ import { AiReviewCard } from "@/components/AiReviewCard";
 import { ScheduleChangeNotices } from "@/components/ScheduleChangeNotices";
 import { normalizeWeekStart } from "@/lib/constants";
 import { currentSaoPauloWeekStart } from "@/lib/deadlines";
+import { authenticatedFetch, setTabSessionToken } from "@/lib/client-auth";
 
 type PublicData = {
   salesMonthLabel?: string;
@@ -48,7 +49,7 @@ export default function SalesRankingPage() {
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
+    authenticatedFetch("/api/me", { cache: "no-store" })
       .then(async (response) => {
         if (response.status === 401) {
           window.location.href = "/login";
@@ -57,7 +58,10 @@ export default function SalesRankingPage() {
         return response.json();
       })
       .then((payload) => {
-        if (payload) setMe(payload.user);
+        if (payload) {
+          if (payload.sessionToken) setTabSessionToken(payload.sessionToken);
+          setMe(payload.user);
+        }
       });
   }, []);
 
@@ -66,7 +70,7 @@ export default function SalesRankingPage() {
   async function reload() {
     // Gerente escolhe a semana; corretor recebe a semana atual (a API força).
     const query = isManager ? `?weekStart=${weekStart}` : "";
-    const response = await fetch(`/api/escala/publica${query}`, { cache: "no-store" });
+    const response = await authenticatedFetch(`/api/escala/publica${query}`, { cache: "no-store" });
     if (response.status === 401) {
       window.location.href = "/login";
       return;

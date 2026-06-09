@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Eye, Save } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StatusPill } from "@/components/StatusPill";
+import { authenticatedFetch } from "@/lib/client-auth";
 
 type UnavailabilityRange = {
   id: string;
@@ -80,7 +81,7 @@ export default function AvailabilityPage() {
     try {
       const params = new URLSearchParams({ month });
       if (brokerId) params.set("brokerId", brokerId);
-      const response = await fetch(`/api/disponibilidade?${params.toString()}`, { cache: "no-store" });
+      const response = await authenticatedFetch(`/api/disponibilidade?${params.toString()}`, { cache: "no-store" });
       if (response.status === 401) {
         window.location.href = "/login";
         return;
@@ -129,7 +130,7 @@ export default function AvailabilityPage() {
         startHour: Number(range.startHour),
         endHour: Number(range.endHour)
       }));
-    const response = await fetch("/api/disponibilidade", {
+    const response = await authenticatedFetch("/api/disponibilidade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ month, ranges: payloadRanges })
