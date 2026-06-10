@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { currentSaoPauloDate, currentSaoPauloWeekStart, dateOnly, dayLabel, dayOfWeekForDate, monthDays, monthFromDate, monthRange, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { normalizeWeekStart } from "@/lib/constants";
 import { availabilityReadiness } from "@/lib/availability-readiness";
+import { invalidatePendingChangeRequests } from "@/lib/ai-schedule-changes";
 
 function uniqueDates(dates: Date[]) {
   return [...new Map(dates.map((date) => [dateOnly(date), date])).values()];
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const touchedWeeks = uniqueDates(editableDates.map((date) => weekStartForDate(date)));
   await prisma.$transaction(async (tx) => {
     await tx.unavailability.deleteMany({
       where: {
@@ -192,7 +194,6 @@ export async function POST(request: NextRequest) {
         }
       });
     }
-    const touchedWeeks = uniqueDates(editableDates.map((date) => weekStartForDate(date)));
     for (const touchedWeek of touchedWeeks) {
       await tx.unavailabilityConfirmation.upsert({
         where: { weekStart_brokerId: { weekStart: touchedWeek, brokerId } },
@@ -201,6 +202,7 @@ export async function POST(request: NextRequest) {
       });
     }
   });
+  await Promise.all(touchedWeeks.map((weekStart) => invalidatePendingChangeRequests(weekStart)));
 
   return NextResponse.json({ ok: true, count: ranges.length });
 }

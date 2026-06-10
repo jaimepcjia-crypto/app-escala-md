@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { currentSaoPauloDate, dateForWeekDay, isWeekDayAfterDate } from "@/lib/deadlines";
 import { DAYS } from "@/lib/constants";
 import { effortLevelLabel, isEffortLevel } from "@/lib/effort-level";
+import { auditDistributionScenarios, publishedFerreiraHistory, type AuditRow } from "@/lib/distribution-audit";
+import { scheduleStateFingerprint } from "@/lib/proposal-state";
+import { executeGeneratedScheduleProposal } from "@/lib/ai-schedule-proposals";
 
 export type RequestedScheduleChange = {
   localName: string | null;
@@ -175,9 +178,38 @@ export async function analyzeScheduleChangeRequest(weekStart: Date, command: str
     };
   }
 
+  const priorities = await prisma.dutyPriority.findMany({ orderBy: [{ position: "asc" }, { localName: "asc" }] });
+  const history = await publishedFerreiraHistory();
+  const today = currentSaoPauloDate().toISOString().slice(0, 10);
+  const beforeRows: AuditRow[] = schedule.assignments.flatMap((assignment) => {
+    if (assignment.assignmentType === "EXTERNAL_IMPORTED" || !assignment.brokerId || !assignment.broker || dateForWeekDay(schedule.weekStart, assignment.dayOfWeek) <= currentSaoPauloDate()) return [];
+    return [{ brokerId: assignment.brokerId, brokerName: assignment.broker.name, localName: assignmentLocalName(assignment), date: dateForWeekDay(schedule.weekStart, assignment.dayOfWeek).toISOString().slice(0, 10) }];
+  });
+  const changeByAssignment = new Map(validation.changes.map((change) => [change.assignmentId, change]));
+  const brokerNameById = new Map(brokers.map((broker) => [broker.id, broker.name]));
+  const afterRows: AuditRow[] = schedule.assignments.flatMap((assignment) => {
+    if (assignment.assignmentType === "EXTERNAL_IMPORTED" || dateForWeekDay(schedule.weekStart, assignment.dayOfWeek) <= currentSaoPauloDate()) return [];
+    const brokerId = changeByAssignment.get(assignment.id)?.newBrokerId ?? assignment.brokerId;
+    if (!brokerId) return [];
+    return [{ brokerId, brokerName: brokerNameById.get(brokerId) ?? assignment.broker?.name ?? "Corretor", localName: assignmentLocalName(assignment), date: dateForWeekDay(schedule.weekStart, assignment.dayOfWeek).toISOString().slice(0, 10) }];
+  });
+  const audit = auditDistributionScenarios({
+    history,
+    before: beforeRows,
+    after: afterRows,
+    brokers: brokers.filter((broker) => broker.active).map((broker) => ({ id: broker.id, name: broker.name })),
+    priorityLocalNames: priorities.map((item) => item.localName),
+    today
+  });
+  const privateWarnings = [
+    ...audit.warnings,
+    ...validation.changes.flatMap((item) => item.privateWarnings),
+    ...validation.changes.flatMap((item) => item.warnings)
+  ];
+  const fingerprint = await scheduleStateFingerprint(weekStart);
   const request = await prisma.$transaction(async (tx) => {
     await tx.aiScheduleChangeRequest.updateMany({
-      where: { weekStart, status: "PENDING" },
+      where: { status: "PENDING" },
       data: { status: "CANCELED", canceledAt: new Date() }
     });
     return tx.aiScheduleChangeRequest.create({
@@ -185,21 +217,23 @@ export async function analyzeScheduleChangeRequest(weekStart: Date, command: str
         scheduleId: schedule.id,
         weekStart,
         command,
+        requestType: "POINT_CHANGE",
         proposedJson: JSON.stringify(validation.changes),
         analysisJson: JSON.stringify({
-          warnings: validation.changes.flatMap((item) => item.warnings),
-          privateWarnings: validation.changes.flatMap((item) => item.privateWarnings)
+          warnings: privateWarnings,
+          facts: audit.facts
         }),
-        summary: validation.changes.map(formatChange).join("\n")
+        summary: validation.changes.map(formatChange).join("\n"),
+        publicSummary: "Alteração de atribuição confirmada expressamente pelo gerente via IA.",
+        stateFingerprint: fingerprint
       }
     });
   });
-  const warningLines = validation.changes.flatMap((item) => item.warnings.map((warning) => `${formatChange(item)} - ${warning}`));
-  const privateWarningLines = validation.changes.flatMap((item) => item.privateWarnings.map((warning) => `${formatChange(item)} - ${warning}`));
   return {
     state: "CONFIRMATION_REQUIRED" as const,
     requestId: request.id,
-    message: `IA: analise concluida. Nenhuma mudanca foi aplicada ainda.\n${validation.changes.map((item) => `- ${formatChange(item)}`).join("\n")}${warningLines.length ? `\n\nRessalvas aos criterios de distribuicao:\n- ${warningLines.join("\n- ")}` : "\n\nO pedido nao contraria os criterios flexiveis publicos atuais."}${privateWarningLines.length ? `\n\nAnalise privada do nivel de esforco:\n- ${privateWarningLines.join("\n- ")}` : ""}\n\nConfirme ou cancele o pedido.`
+    hasWarnings: privateWarnings.length > 0,
+    message: `IA: análise concluída. Nenhuma mudança foi aplicada ainda.\n${validation.changes.map((item) => `- ${formatChange(item)}`).join("\n")}${privateWarnings.length ? `\n\nRessalvas privadas da auditoria histórica:\n- ${privateWarnings.join("\n- ")}\n\nVocê deseja confirmar apesar das ressalvas?` : "\n\nNão detectei aumento mensurável de desequilíbrio. Confirme ou cancele o pedido."}`
   };
 }
 
@@ -309,9 +343,9 @@ async function validateResolvedChanges(
   return { changes, hardBlocks: [...new Set(hardBlocks)], hasUnavailability };
 }
 
-export async function decideScheduleChangeRequest(weekStart: Date, decision: "CONFIRM" | "CANCEL", requestId?: string | null) {
+export async function decideScheduleChangeRequest(_weekStart: Date, decision: "CONFIRM" | "CANCEL", requestId?: string | null) {
   const request = await prisma.aiScheduleChangeRequest.findFirst({
-    where: { ...(requestId ? { id: requestId } : { weekStart, status: "PENDING" }) },
+    where: { ...(requestId ? { id: requestId } : { status: "PENDING" }) },
     orderBy: { createdAt: "desc" }
   });
   if (!request || request.status !== "PENDING") return { state: "BLOCKED" as const, message: "IA: nao existe pedido pendente valido para esta semana." };
@@ -320,8 +354,27 @@ export async function decideScheduleChangeRequest(weekStart: Date, decision: "CO
     return { state: "CANCELED" as const, requestId: request.id, message: "IA: pedido cancelado. Nenhuma mudanca foi aplicada." };
   }
 
+  const fingerprint = await scheduleStateFingerprint(request.weekStart);
+  if (!request.stateFingerprint || fingerprint !== request.stateFingerprint) {
+    await prisma.aiScheduleChangeRequest.update({ where: { id: request.id }, data: { status: "STALE" } });
+    return { state: "BLOCKED" as const, message: "IA: prioridades, escala, indisponibilidades, corretores, importação ou dia atual mudaram desde a análise. Faça um novo pedido." };
+  }
+  if (request.requestType === "INITIAL_GENERATION" || request.requestType === "REMAINDER_REDISTRIBUTION") {
+    try {
+      const result = await executeGeneratedScheduleProposal(request);
+      return { state: "EXECUTED" as const, requestId: request.id, message: request.requestType === "INITIAL_GENERATION" ? "IA: prévia confirmada e escala publicada exatamente como analisada." : "IA: redistribuição confirmada e aplicada exatamente como analisada.", data: result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "A confirmação falhou.";
+      if (message.startsWith("STALE:")) {
+        await prisma.aiScheduleChangeRequest.update({ where: { id: request.id }, data: { status: "STALE" } });
+        return { state: "BLOCKED" as const, message: `IA: confirmação bloqueada. ${message.replace(/^STALE:\s*/, "")}` };
+      }
+      throw error;
+    }
+  }
+
   const proposed = JSON.parse(request.proposedJson) as ResolvedChange[];
-  const schedule = await publishedSchedule(weekStart);
+  const schedule = await publishedSchedule(request.weekStart);
   if (!schedule || schedule.id !== request.scheduleId) {
     await prisma.aiScheduleChangeRequest.update({ where: { id: request.id }, data: { status: "STALE" } });
     return { state: "BLOCKED" as const, message: "IA: a escala mudou desde a analise. Faca um novo pedido." };
@@ -386,10 +439,7 @@ export async function decideScheduleChangeRequest(weekStart: Date, decision: "CO
       }
 
       for (const change of validation.changes) {
-        const reasons = [
-          `Mudanca confirmada pelo gerente via IA: ${change.expectedBrokerName ?? "sem cobertura"} -> ${change.newBrokerName ?? "sem cobertura"}.`,
-          ...change.warnings
-        ];
+        const reasons = [`Mudança confirmada pelo gerente via IA: ${change.expectedBrokerName ?? "sem cobertura"} -> ${change.newBrokerName ?? "sem cobertura"}.`];
         await tx.manualAdjustmentAlert.deleteMany({ where: { assignmentId: change.assignmentId } });
         await tx.scheduleAssignment.update({
           where: { id: change.assignmentId },
@@ -398,7 +448,7 @@ export async function decideScheduleChangeRequest(weekStart: Date, decision: "CO
             assignmentType: "FERREIRA_MANAGER_AI",
             isViolation: false,
             violationReason: null,
-            balanceAlert: change.warnings.join(" | ") || null
+            balanceAlert: null
           }
         });
         for (const reason of reasons) await tx.manualAdjustmentAlert.create({ data: { assignmentId: change.assignmentId, reason } });
@@ -413,7 +463,7 @@ export async function decideScheduleChangeRequest(weekStart: Date, decision: "CO
             dayOfWeek: change.dayOfWeek,
             timeLabel: change.timeLabel,
             startHour: change.startHour,
-            warningsJson: JSON.stringify(change.warnings)
+            warningsJson: "[]"
           }
         });
       }
@@ -433,6 +483,13 @@ export async function decideScheduleChangeRequest(weekStart: Date, decision: "CO
 export async function invalidatePendingChangeRequests(weekStart: Date) {
   await prisma.aiScheduleChangeRequest.updateMany({
     where: { weekStart, status: "PENDING" },
+    data: { status: "STALE" }
+  });
+}
+
+export async function invalidateAllPendingChangeRequests() {
+  await prisma.aiScheduleChangeRequest.updateMany({
+    where: { status: "PENDING" },
     data: { status: "STALE" }
   });
 }

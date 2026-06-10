@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ensureSeedData, managerInitialEmail } from "@/lib/seed";
 import { formatWeekStart, normalizeWeekStart, type DayOfWeek, type Shift } from "@/lib/constants";
-import { addDays, currentSaoPauloWeekStart, dateForWeekDay, dateOnly, dayOfWeekForDate, defaultAiScheduleWeek, generationWindowStatus, parseDateOnly, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { addDays, currentSaoPauloWeekStart, dateForWeekDay, dateOnly, dayOfWeekForDate, generationWindowStatus, parseDateOnly, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { availabilityReadiness } from "@/lib/availability-readiness";
 
 async function publishedHistoryCounts() {
@@ -54,7 +54,6 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
   await ensureSeedData();
   const workflow = weeklyWorkflowStatus();
   const weekStart = normalizeWeekStart(workflow.weekStartDate);
-  const aiWeekStart = defaultAiScheduleWeek();
   const [teams, rawBrokers, dutyTypes, windows, schedules, imports, latestConfirmedImport, confirmations, priorityRows, historyByBroker, pendingChangeRequest] = await Promise.all([
     prisma.team.findMany({ orderBy: { name: "asc" } }),
     prisma.broker.findMany({ include: { team: true, historyTotal: true, user: true }, orderBy: { name: "asc" } }),
@@ -74,7 +73,7 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
     prisma.unavailabilityConfirmation.findMany({ where: { weekStart }, include: { broker: true } }),
     prisma.dutyPriority.findMany(),
     publishedHistoryCounts(),
-    prisma.aiScheduleChangeRequest.findFirst({ where: { weekStart: aiWeekStart, status: "PENDING" }, orderBy: { createdAt: "desc" } })
+    prisma.aiScheduleChangeRequest.findFirst({ where: { status: "PENDING" }, orderBy: { createdAt: "desc" } })
   ]);
 
   const brokers = rawBrokers
@@ -128,7 +127,7 @@ export async function getAdminSnapshot(_weekStartInput?: string) {
   };
 }
 
-export async function getPublishedSchedule(weekStartInput?: string, options: { ferreiraOnly?: boolean } = {}) {
+export async function getPublishedSchedule(weekStartInput?: string, options: { ferreiraOnly?: boolean; isManager?: boolean } = {}) {
   await ensureSeedData();
   const weekStart = weekStartInput ? normalizeWeekStart(weekStartInput) : currentSaoPauloWeekStart();
   const schedule = await prisma.schedule.findFirst({
@@ -155,9 +154,20 @@ export async function getPublishedSchedule(weekStartInput?: string, options: { f
     select: { id: true, name: true, team: { select: { name: true, isFerreira: true } } },
     orderBy: { name: "asc" }
   });
+  const visibleSchedule = !schedule || options.isManager ? schedule : {
+    ...schedule,
+    aiReview: null,
+    assignments: schedule.assignments.map((assignment) => ({
+      ...assignment,
+      balanceAlert: null,
+      violationReason: null,
+      manualAlerts: []
+    })),
+    changeNotices: schedule.changeNotices.map((notice) => ({ ...notice, warningsJson: "[]" }))
+  };
   return {
     weekStart: formatWeekStart(weekStart),
-    schedule,
+    schedule: visibleSchedule,
     brokers
   };
 }

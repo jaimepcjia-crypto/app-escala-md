@@ -5,6 +5,7 @@ import { weeklyWorkflowStatus } from "@/lib/deadlines";
 import { isValidEmail, isValidNumericPassword, normalizeEmail, numericPasswordError, passwordCredentialData, requireManager, verifyPassword } from "@/lib/auth";
 import { brokerIdentityChanged } from "@/lib/availability-readiness";
 import { isEffortLevel } from "@/lib/effort-level";
+import { invalidateAllPendingChangeRequests } from "@/lib/ai-schedule-changes";
 
 export async function GET(request: NextRequest) {
   const auth = await requireManager(request);
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
       }
       return updated;
     });
+    await invalidateAllPendingChangeRequests();
     return NextResponse.json({ broker, futureAvailabilityReset: identityChanged });
   }
 
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
       await tx.broker.delete({ where: { id: brokerId } });
     });
 
+    await invalidateAllPendingChangeRequests();
     return NextResponse.json({ ok: true, broker });
   }
 
@@ -88,6 +91,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Selecione um nivel de esforco valido." }, { status: 400 });
     }
     const broker = await prisma.broker.update({ where: { id: brokerId }, data: { effortLevel } });
+    await invalidateAllPendingChangeRequests();
     return NextResponse.json({ broker });
   }
 
@@ -135,6 +139,7 @@ export async function POST(request: NextRequest) {
         })
       )
     );
+    await invalidateAllPendingChangeRequests();
     return NextResponse.json({ ok: true });
   }
 
@@ -169,6 +174,7 @@ export async function POST(request: NextRequest) {
       });
       return created;
     });
+    await invalidateAllPendingChangeRequests();
     return NextResponse.json({ broker });
   }
 

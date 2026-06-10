@@ -222,14 +222,17 @@ model ManualAdjustmentAlert {
 
 model AiScheduleChangeRequest {
   id              String   @id @default(cuid())
-  scheduleId      String
-  schedule        Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduleId      String?
+  schedule        Schedule? @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
   weekStart       DateTime
   command         String
+  requestType     String   @default("POINT_CHANGE")
   status          String   @default("PENDING")
   proposedJson    String
   analysisJson    String
   summary         String
+  publicSummary   String?
+  stateFingerprint String?
   confirmedAt     DateTime?
   canceledAt      DateTime?
   createdAt       DateTime @default(now())

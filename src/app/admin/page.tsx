@@ -15,7 +15,7 @@ type Snapshot = {
   schedules: Array<{ id: string; status: "DRAFT" | "PUBLISHED"; publishedAt?: string | null }>;
   readiness: { totalFerreiraBrokers: number; confirmed: number; allConfirmed: boolean };
   plantaoPriorities: Array<{ localName: string; position: number }>;
-  pendingChangeRequest?: { id: string; summary: string; status: string } | null;
+  pendingChangeRequest?: { id: string; summary: string; status: string; analysisJson?: string | null } | null;
   workflow: Workflow;
 };
 type ArchiveImport = { id: string; weekStart: string; fileName: string; status: string; createdAt: string; summary: { total: number; ferreiraWindows: number; external: number } };
@@ -42,6 +42,7 @@ export default function AdminPage() {
   const [iaAnswer, setIaAnswer] = useState("");
   const [iaBusy, setIaBusy] = useState(false);
   const [iaPendingRequestId, setIaPendingRequestId] = useState<string | null>(null);
+  const [iaPendingHasWarnings, setIaPendingHasWarnings] = useState(false);
   const [newBroker, setNewBroker] = useState({ name: "", email: "", initialPassword: "", canExternalDuty: true, active: true });
   const [managerPassword, setManagerPassword] = useState({ currentPassword: "", newPassword: "" });
   const [priorityNotice, setPriorityNotice] = useState("");
@@ -62,6 +63,16 @@ export default function AdminPage() {
       setSnapshot(nextSnapshot);
       setArchive(nextArchive);
       setIaPendingRequestId(nextSnapshot.pendingChangeRequest?.id ?? null);
+      try {
+        const analysis = JSON.parse(nextSnapshot.pendingChangeRequest?.analysisJson ?? "{}");
+        const warnings = Array.isArray(analysis.warnings) ? analysis.warnings.map(String) : [];
+        setIaPendingHasWarnings(warnings.length > 0);
+        if (nextSnapshot.pendingChangeRequest) {
+          setIaAnswer(`IA: existe uma proposta aguardando sua decisão.\n${nextSnapshot.pendingChangeRequest.summary}${warnings.length ? `\n\nRessalvas privadas:\n- ${warnings.join("\n- ")}` : "\n\nNenhum aumento mensurável de desequilíbrio foi detectado."}`);
+        }
+      } catch {
+        setIaPendingHasWarnings(false);
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Falha ao carregar o painel.");
     } finally {
@@ -132,6 +143,7 @@ export default function AdminPage() {
       if (!response.ok) throw new Error(data.error ?? "Falha ao executar comando.");
       setIaAnswer(data.message ?? "IA: comando executado.");
       setIaPendingRequestId(data.state === "CONFIRMATION_REQUIRED" ? data.requestId : null);
+      setIaPendingHasWarnings(data.state === "CONFIRMATION_REQUIRED" && Boolean(data.hasWarnings));
       setIaCommand("");
       await load();
     } catch (error) {
@@ -276,14 +288,14 @@ export default function AdminPage() {
               )}
             </div>
             <PriorityCard items={snapshot?.plantaoPriorities ?? []} notice={priorityNotice} onMove={movePriority} />
-            <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} ask={askIa} />
+            <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} hasWarnings={iaPendingHasWarnings} ask={askIa} />
           </section>
         )}
 
         {!workflow?.isOpen ? (
           <section className="grid gap-4 xl:grid-cols-2">
             <PriorityCard items={snapshot?.plantaoPriorities ?? []} notice={priorityNotice} onMove={movePriority} />
-            <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} ask={askIa} />
+            <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} hasWarnings={iaPendingHasWarnings} ask={askIa} />
           </section>
         ) : null}
         {notice ? <div className="ui-font rounded-xl border border-sand/40 bg-sand/15 p-3 text-sm">{notice}</div> : null}
@@ -374,8 +386,8 @@ function StepTitle({ number, title, icon: Icon }: { number: string; title: strin
   return <div className="flex items-center justify-between"><div><p className="eyebrow">{number}</p><h3 className="text-xl font-semibold">{title}</h3></div><Icon className="text-signal" size={22} /></div>;
 }
 
-function AiCard({ command, setCommand, answer, busy, pending, ask }: { command: string; setCommand: (value: string) => void; answer: string; busy: boolean; pending: boolean; ask: (command?: string, decision?: "CONFIRM" | "CANCEL") => Promise<void> }) {
-  return <div className="panel rounded-2xl p-4"><StepTitle number="03" title="Assistente IA" icon={RefreshCw} /><p className="ui-font mt-2 text-xs text-graphite">Pergunte sobre o app ou dê uma ordem ao motor da escala.</p><textarea className="control mt-3 min-h-24 w-full resize-y rounded-xl px-3 py-2 text-sm" value={command} onChange={(e) => setCommand(e.target.value)} placeholder="Ex: como funciona o NÃO PODE? ou publique a próxima escala" /><button className="action-primary mt-2 w-full" onClick={() => void ask()} disabled={busy}>{busy ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Enviar para IA</button>{answer ? <pre className="ui-font mt-3 whitespace-pre-wrap rounded-xl bg-linen/60 p-3 text-xs">{answer}</pre> : null}{pending ? <div className="mt-2 grid grid-cols-2 gap-2"><button className="action-primary" onClick={() => void ask("Confirme", "CONFIRM")}>Confirmar</button><button className="action-secondary" onClick={() => void ask("Cancele", "CANCEL")}>Cancelar</button></div> : null}</div>;
+function AiCard({ command, setCommand, answer, busy, pending, hasWarnings, ask }: { command: string; setCommand: (value: string) => void; answer: string; busy: boolean; pending: boolean; hasWarnings: boolean; ask: (command?: string, decision?: "CONFIRM" | "CANCEL") => Promise<void> }) {
+  return <div className="panel rounded-2xl p-4"><StepTitle number="03" title="Assistente IA" icon={RefreshCw} /><p className="ui-font mt-2 text-xs text-graphite">Pergunte sobre o app ou dê uma ordem ao motor da escala. Toda geração, redistribuição ou alteração será simulada antes da confirmação.</p><textarea className="control mt-3 min-h-24 w-full resize-y rounded-xl px-3 py-2 text-sm" value={command} onChange={(e) => setCommand(e.target.value)} placeholder="Ex: como funciona o NÃO PODE? ou prepare a próxima escala" /><button className="action-primary mt-2 w-full" onClick={() => void ask()} disabled={busy}>{busy ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />} Enviar para IA</button>{answer ? <pre className="ui-font mt-3 whitespace-pre-wrap rounded-xl bg-linen/60 p-3 text-xs">{answer}</pre> : null}{pending ? <div className="mt-2 grid grid-cols-2 gap-2"><button className="action-primary" onClick={() => void ask("Confirme", "CONFIRM")}>{hasWarnings ? "Confirmar apesar das ressalvas" : "Confirmar"}</button><button className="action-secondary" onClick={() => void ask("Cancele", "CANCEL")}>Cancelar</button></div> : null}</div>;
 }
 
 function PriorityCard({ items, notice, onMove }: { items: Array<{ localName: string; position: number }>; notice: string; onMove: (fromIndex: number, toIndex: number) => void }) {

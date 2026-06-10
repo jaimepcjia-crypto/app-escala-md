@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireManager } from "@/lib/auth";
-import { generateAndPublishSchedule } from "@/lib/schedule-actions";
+import { analyzeInitialGenerationRequest } from "@/lib/ai-schedule-proposals";
 import { weeklyWorkflowStatus } from "@/lib/deadlines";
 
 export async function POST(request: NextRequest) {
@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   if ("error" in auth) return auth.error;
 
   try {
-    return NextResponse.json(await generateAndPublishSchedule(weeklyWorkflowStatus().weekStartDate));
+    return NextResponse.json(await analyzeInitialGenerationRequest(weeklyWorkflowStatus().weekStartDate, "Gerar e publicar a próxima escala"));
   } catch (error) {
     const status = typeof error === "object" && error && "status" in error ? Number((error as { status: number }).status) : 500;
     return NextResponse.json({ error: error instanceof Error ? error.message : "Falha ao gerar escala." }, { status });

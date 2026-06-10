@@ -5,6 +5,7 @@ import { alignParsedScheduleToWeek, parseScheduleFile } from "@/lib/importer";
 import { ensureSeedData } from "@/lib/seed";
 import { deleteUnpublishedImport, replaceWithValidatedImport } from "@/lib/import-workflow";
 import { generationWindowStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { invalidatePendingChangeRequests } from "@/lib/ai-schedule-changes";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
       fileType: file.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
       parsed
     });
+    await invalidatePendingChangeRequests(weekStart);
 
     return NextResponse.json({
       import: scheduleImport,
@@ -53,7 +55,9 @@ export async function DELETE(request: NextRequest) {
     if (!workflow.isOpen) return NextResponse.json({ error: `Arquivos da proxima escala so podem ser excluidos no sabado ou domingo.` }, { status: 403 });
     const importId = request.nextUrl.searchParams.get("importId") ?? "";
     if (!importId) return NextResponse.json({ error: "Arquivo obrigatorio." }, { status: 400 });
-    return NextResponse.json(await deleteUnpublishedImport(importId, workflow.weekStartDate));
+    const result = await deleteUnpublishedImport(importId, workflow.weekStartDate);
+    await invalidatePendingChangeRequests(workflow.weekStartDate);
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Falha ao excluir arquivo." }, { status: 400 });
   }

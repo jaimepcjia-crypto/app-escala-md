@@ -11,5 +11,5 @@ export async function GET(request: NextRequest) {
   const isBroker = auth.user.role === "BROKER";
   const weekStart = isBroker ? formatWeekStart(currentSaoPauloWeekStart()) : requestedWeekStart;
   const ferreiraOnly = request.nextUrl.searchParams.get("ferreiraOnly") === "1";
-  return NextResponse.json(await getPublishedSchedule(weekStart, { ferreiraOnly }));
+  return NextResponse.json(await getPublishedSchedule(weekStart, { ferreiraOnly, isManager: !isBroker }));
 }

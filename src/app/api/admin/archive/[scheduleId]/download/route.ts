@@ -111,7 +111,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           dutyType: true
         }
       },
-      changeNotices: { orderBy: { confirmedAt: "asc" } }
+      changeNotices: { include: { request: true }, orderBy: { confirmedAt: "asc" } }
     }
   });
 
@@ -167,17 +167,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       { header: "Horário", key: "time", width: 18 },
       { header: "Corretor anterior", key: "previous", width: 24 },
       { header: "Novo corretor", key: "next", width: 24 },
-      { header: "Critérios contrariados", key: "warnings", width: 70 },
+      { header: "Auditoria histórica privada", key: "warnings", width: 70 },
       { header: "Confirmação", key: "confirmation", width: 34 }
     ];
     notices.getRow(1).font = { bold: true };
     for (const notice of schedule.changeNotices) {
       const warnings = (() => {
         try {
-          const parsed = JSON.parse(notice.warningsJson);
-          return Array.isArray(parsed) && parsed.length ? parsed.join(" | ") : "Nenhum critério flexível contrariado.";
+          const analysis = JSON.parse(notice.request.analysisJson);
+          return Array.isArray(analysis.warnings) && analysis.warnings.length ? analysis.warnings.join(" | ") : "Nenhum aumento mensurável de desequilíbrio detectado.";
         } catch {
-          return notice.warningsJson;
+          return "Análise privada indisponível.";
         }
       })();
       notices.addRow({

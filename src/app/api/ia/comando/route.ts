@@ -4,8 +4,8 @@ import { requireManager } from "@/lib/auth";
 import { aiScheduleWeekForCommand, currentSaoPauloDate, dateOnly, generationWindowStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 import { getAdminSnapshot } from "@/lib/data";
 import { requestLlmJson } from "@/lib/llm";
-import { generateAndPublishSchedule, redistributePublishedScheduleRemainder } from "@/lib/schedule-actions";
 import { analyzeScheduleChangeRequest, decideScheduleChangeRequest, invalidatePendingChangeRequests, type RequestedScheduleChange } from "@/lib/ai-schedule-changes";
+import { analyzeInitialGenerationRequest, analyzeRemainderRedistributionRequest } from "@/lib/ai-schedule-proposals";
 import { answerBrokerOperationalQuestion } from "@/lib/ai-operational-questions";
 import { answerAppQuestion, type AppAssistantContext } from "@/lib/app-assistant";
 import { directOperationalAction } from "@/lib/ai-command-intent";
@@ -264,14 +264,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (intent.action === "GENERATE_AND_PUBLISH") {
-      const result = await generateAndPublishSchedule(weeklyWorkflowStatus().weekStartDate);
-      return NextResponse.json({
-        intent,
-        message: result.conflicts.length
-          ? `IA: escala gerada e publicada com ${result.conflicts.length} conflito(s).`
-          : "IA: escala gerada e publicada sem conflitos.",
-        data: result
-      });
+      const result = await analyzeInitialGenerationRequest(weeklyWorkflowStatus().weekStartDate, command);
+      return NextResponse.json({ intent, ...result, data: result });
     }
 
     if (intent.action === "CANCEL_PUBLICATION") {
@@ -297,34 +291,18 @@ export async function POST(request: NextRequest) {
       const workflow = weeklyWorkflowStatus();
       const isCurrentWeek = weekStart.getTime() === workflow.currentWeekStartDate.getTime();
       const result = isCurrentWeek
-        ? await redistributePublishedScheduleRemainder(weekStart, { balanceMode: "MORE_BALANCED" })
-        : await generateAndPublishSchedule(weekStart, { balanceMode: "MORE_BALANCED" });
-      return NextResponse.json({
-        intent,
-        message: isCurrentWeek
-          ? `IA: preservei integralmente todos os plantoes ate o fim de hoje e redistribui somente os dias seguintes usando a prioridade atual dos plantoes.${result.conflicts.length ? ` Existem ${result.conflicts.length} conflito(s).` : ""}`
-          : result.conflicts.length
-            ? `IA: gerei e publiquei uma nova versao buscando mais equilibrio, com ${result.conflicts.length} conflito(s).`
-            : "IA: gerei e publiquei uma nova versao buscando mais equilibrio.",
-        data: result
-      });
+        ? await analyzeRemainderRedistributionRequest(weekStart, command, { balanceMode: "MORE_BALANCED" })
+        : await analyzeInitialGenerationRequest(weekStart, command, { balanceMode: "MORE_BALANCED" });
+      return NextResponse.json({ intent, ...result, data: result });
     }
 
     if (intent.action === "INVESTIGATE_BENEFIT_AND_REGENERATE") {
       const workflow = weeklyWorkflowStatus();
       const isCurrentWeek = weekStart.getTime() === workflow.currentWeekStartDate.getTime();
       const result = isCurrentWeek
-        ? await redistributePublishedScheduleRemainder(weekStart, { balanceMode: "MORE_BALANCED", focusBrokerName: intent.focusBrokerName })
-        : await generateAndPublishSchedule(weekStart, { balanceMode: "MORE_BALANCED", focusBrokerName: intent.focusBrokerName });
-      return NextResponse.json({
-        intent,
-        message: isCurrentWeek
-          ? `IA: preservei integralmente todos os plantoes ate o fim de hoje e redistribui somente os dias seguintes${intent.focusBrokerName ? ` considerando o possivel beneficio de ${intent.focusBrokerName}` : ""}.`
-          : intent.focusBrokerName
-            ? `IA: revisei o possivel beneficio de ${intent.focusBrokerName}, gerei outra escala com maior equilibrio e publiquei.`
-            : "IA: gerei outra escala com maior equilibrio, mas nao identifiquei o nome do corretor citado.",
-        data: result
-      });
+        ? await analyzeRemainderRedistributionRequest(weekStart, command, { balanceMode: "MORE_BALANCED", focusBrokerName: intent.focusBrokerName })
+        : await analyzeInitialGenerationRequest(weekStart, command, { balanceMode: "MORE_BALANCED", focusBrokerName: intent.focusBrokerName });
+      return NextResponse.json({ intent, ...result, data: result });
     }
 
     if (intent.action === "EXPLAIN_FAIRNESS") {
