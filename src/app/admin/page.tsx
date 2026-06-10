@@ -294,11 +294,66 @@ export default function AdminPage() {
             <div className="mt-4"><BrokersPanel brokers={archive?.brokers ?? []} onSave={updateBroker} onEffortSave={updateEffortLevel} onDelete={deleteBroker} /></div>
           </details>
           <details className="panel rounded-2xl p-4">
-            <summary className="ui-font cursor-pointer font-bold">Novo corretor e segurança</summary>
-            <div className="mt-4 grid gap-5 lg:grid-cols-3">
-              <div className="grid gap-2"><h3 className="font-semibold">Novo corretor</h3><input className="control rounded-xl px-3 py-2" placeholder="Nome" value={newBroker.name} onChange={(e) => setNewBroker({ ...newBroker, name: e.target.value })} /><input className="control rounded-xl px-3 py-2" placeholder="Email" value={newBroker.email} onChange={(e) => setNewBroker({ ...newBroker, email: e.target.value })} /><input className="control rounded-xl px-3 py-2" placeholder="Senha inicial" value={newBroker.initialPassword} onChange={(e) => setNewBroker({ ...newBroker, initialPassword: e.target.value })} /><button className="action-primary" onClick={createBroker}><Plus size={15} /> Adicionar</button></div>
-              <div className="grid gap-2"><h3 className="font-semibold">Minha senha</h3><input className="control rounded-xl px-3 py-2" type="password" placeholder="Senha atual" value={managerPassword.currentPassword} onChange={(e) => setManagerPassword({ ...managerPassword, currentPassword: e.target.value })} /><input className="control rounded-xl px-3 py-2" type="password" placeholder="Nova senha" value={managerPassword.newPassword} onChange={(e) => setManagerPassword({ ...managerPassword, newPassword: e.target.value })} /><button className="action-secondary" onClick={changeManagerPassword}><KeyRound size={15} /> Alterar senha</button></div>
-              <div><h3 className="font-semibold">Acesso do gerente</h3><p className="ui-font mt-2 break-all text-xs text-graphite">{archive?.managerEmail ? accessUrlFor(archive.managerEmail) : "-"}</p><button className="action-secondary mt-3" onClick={copyManagerLink}><Copy size={15} /> Copiar link</button></div>
+            <summary className="ui-font cursor-pointer font-bold">Cadastrar novo corretor</summary>
+            <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.65fr)]">
+              <div className="grid gap-3 rounded-2xl border border-graphite/10 bg-white/45 p-4">
+                <div>
+                  <p className="eyebrow">Novo acesso</p>
+                  <h3 className="text-xl font-semibold">Criar corretor e login</h3>
+                  <p className="ui-font mt-1 text-xs text-graphite">Use este formulário somente para adicionar uma nova pessoa à equipe Ferreira. A senha criada aqui pertence ao novo corretor.</p>
+                </div>
+                <label className="ui-font grid gap-1 text-xs font-bold">
+                  Nome do novo corretor
+                  <input className="control rounded-xl px-3 py-2 font-normal" placeholder="Ex.: Maria Silva" value={newBroker.name} onChange={(e) => setNewBroker({ ...newBroker, name: e.target.value })} />
+                </label>
+                <label className="ui-font grid gap-1 text-xs font-bold">
+                  Email usado pelo corretor para entrar
+                  <input className="control rounded-xl px-3 py-2 font-normal" type="email" placeholder="Ex.: maria@exemplo.com" value={newBroker.email} onChange={(e) => setNewBroker({ ...newBroker, email: e.target.value })} />
+                </label>
+                <label className="ui-font grid gap-1 text-xs font-bold">
+                  Senha inicial do novo corretor
+                  <input className="control rounded-xl px-3 py-2 font-normal" inputMode="numeric" placeholder="De 4 a 10 números" value={newBroker.initialPassword} onChange={(e) => setNewBroker({ ...newBroker, initialPassword: e.target.value })} />
+                </label>
+                <button className="action-primary" onClick={createBroker}><Plus size={15} /> Criar corretor e login</button>
+              </div>
+              <aside className="ui-font rounded-2xl border border-sand/35 bg-sand/10 p-4 text-xs text-graphite">
+                <strong className="block text-sm text-ink">O que acontece ao criar?</strong>
+                <p className="mt-2">O corretor passa a aparecer na lista administrativa, recebe acesso próprio e precisa informar suas indisponibilidades.</p>
+                <p className="mt-2">Depois, defina também o nível de esforço desse corretor antes de gerar uma nova escala.</p>
+              </aside>
+            </div>
+          </details>
+          <details className="panel rounded-2xl p-4">
+            <summary className="ui-font cursor-pointer font-bold">Minha conta de gerente</summary>
+            <div className="mt-4 grid gap-5 lg:grid-cols-2">
+              <div className="grid gap-3 rounded-2xl border border-graphite/10 bg-white/45 p-4">
+                <div>
+                  <p className="eyebrow">Segurança do gerente</p>
+                  <h3 className="text-xl font-semibold">Alterar minha senha</h3>
+                  <p className="ui-font mt-1 text-xs text-graphite">Os campos abaixo alteram somente a senha da conta de gerente que está conectada agora.</p>
+                </div>
+                <label className="ui-font grid gap-1 text-xs font-bold">
+                  Minha senha atual
+                  <input className="control rounded-xl px-3 py-2 font-normal" type="password" placeholder="Digite sua senha atual" value={managerPassword.currentPassword} onChange={(e) => setManagerPassword({ ...managerPassword, currentPassword: e.target.value })} />
+                </label>
+                <label className="ui-font grid gap-1 text-xs font-bold">
+                  Minha nova senha
+                  <input className="control rounded-xl px-3 py-2 font-normal" type="password" placeholder="Digite a nova senha" value={managerPassword.newPassword} onChange={(e) => setManagerPassword({ ...managerPassword, newPassword: e.target.value })} />
+                </label>
+                <button className="action-secondary" onClick={changeManagerPassword}><KeyRound size={15} /> Alterar senha da minha conta</button>
+              </div>
+              <div className="grid content-start gap-3 rounded-2xl border border-graphite/10 bg-linen/55 p-4">
+                <div>
+                  <p className="eyebrow">Login do gerente</p>
+                  <h3 className="text-xl font-semibold">Meu link de acesso</h3>
+                  <p className="ui-font mt-1 text-xs text-graphite">Este link abre a tela de login com o email do gerente já preenchido. Ele não cria nem altera corretores.</p>
+                </div>
+                <div className="rounded-xl border border-graphite/10 bg-white/55 p-3">
+                  <span className="ui-font block text-[10px] font-bold uppercase tracking-[0.12em] text-graphite">Email do gerente</span>
+                  <strong className="ui-font mt-1 block break-all text-sm">{archive?.managerEmail ?? "-"}</strong>
+                </div>
+                <button className="action-secondary" onClick={copyManagerLink}><Copy size={15} /> Copiar meu link de login</button>
+              </div>
             </div>
           </details>
           <details className="panel rounded-2xl p-4">
