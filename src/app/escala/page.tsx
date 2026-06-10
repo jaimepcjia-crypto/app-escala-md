@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { WeeklyScheduleAgenda } from "@/components/WeeklyScheduleAgenda";
 import { AiReviewCard } from "@/components/AiReviewCard";
 import { ScheduleChangeNotices } from "@/components/ScheduleChangeNotices";
+import { DistributionMemorandum } from "@/components/DistributionMemorandum";
 import { normalizeWeekStart } from "@/lib/constants";
 import { currentSaoPauloWeekStart } from "@/lib/deadlines";
 import { authenticatedFetch, setTabSessionToken } from "@/lib/client-auth";
@@ -134,59 +135,7 @@ export default function SchedulePage() {
           )}
         </section>
 
-        {/* Memorando: como o sistema distribui os plantoes (visivel a todos) */}
-        <section className="panel rounded-lg p-4">
-          <div className="mb-2">
-            <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Memorando</p>
-            <h2 className="text-xl font-bold">Como os plantões são distribuídos</h2>
-            <p className="ui-font mt-1 text-xs text-graphite">
-              Regras públicas de segurança e equilíbrio usadas pelo motor.
-            </p>
-          </div>
-
-          <div className="ui-font space-y-3 text-sm">
-            <div className="rounded-md border border-graphite/15 bg-paper p-3">
-              <div className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-graphite">
-                Primeiro, regras que tiram o corretor do plantão (travas)
-              </div>
-              <ul className="list-disc pl-5 text-graphite">
-                <li>Indisponibilidade: quem marcou “não pode” naquele horário não entra.</li>
-                <li>Plantão externo: só corretores autorizados a fazer externo.</li>
-                <li>Não pode estar em dois plantões no mesmo horário.</li>
-                <li>Corretor inativo não entra na distribuição.</li>
-              </ul>
-            </div>
-
-            <div className="rounded-md border border-graphite/15 bg-linen/50 p-3">
-              <div className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-graphite">
-                Depois, entre os que podem, vale o peso de cada critério
-              </div>
-              <ul className="space-y-2 text-graphite">
-                <li>
-                  <strong className="text-ink">1) Equilíbrio entre os corretores.</strong> Quem já
-                  pegou mais plantões no geral cede a vez, para a distribuição ficar justa.
-                </li>
-                <li>
-                  <strong className="text-ink">2) Não concentrar o mesmo tipo de plantão.</strong>{" "}
-                  Evita que sempre o mesmo corretor pegue o mesmo tipo de plantão.
-                </li>
-                <li>
-                  <strong className="text-ink">3) Espalhar ao longo da semana.</strong> Evita
-                  acumular muitos plantões do mesmo corretor na mesma semana.
-                </li>
-                <li>
-                  <strong className="text-ink">4) Desempate justo.</strong> Quando dá empate, um sorteio leve
-                  decide, sem favorecer ninguém.
-                </li>
-              </ul>
-            </div>
-
-            <p className="text-xs text-graphite">
-              Observação: o gerente pode pedir à IA o “modo mais equilibrado”, que aumenta o peso do
-              equilíbrio entre os corretores nessa geração.
-            </p>
-          </div>
-        </section>
+        <DistributionMemorandum isManager={isManager} />
       </div>
     </AppShell>
   );
