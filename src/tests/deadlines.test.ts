@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { brokerAvailabilityAlertStatus, defaultAiScheduleWeek, generationWindowStatus, nextAvailabilityDeadline, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
+import { brokerAvailabilityAlertStatus, defaultAiScheduleWeek, generationWindowStatus, isWeekDayAfterDate, nextAvailabilityDeadline, unavailableDateStatus, weeklyWorkflowStatus } from "@/lib/deadlines";
 
 it("allows dates from today through the next 12 months", () => {
   const now = new Date("2026-06-03T15:00:00.000Z");
@@ -47,4 +47,14 @@ it("shows the broker deadline alert only from Monday 08:00 through Friday in Sao
   expect(brokerAvailabilityAlertStatus(new Date("2026-06-13T03:00:00.000Z")).visible).toBe(false);
   expect(brokerAvailabilityAlertStatus(new Date("2026-06-15T10:59:59.000Z")).visible).toBe(false);
   expect(brokerAvailabilityAlertStatus(new Date("2026-06-15T11:00:00.000Z")).visible).toBe(true);
+});
+
+it("freezes past days and the entire current day during a partial redistribution", () => {
+  const weekStart = new Date("2026-06-08T00:00:00.000Z");
+  const wednesday = new Date("2026-06-10T00:00:00.000Z");
+  expect(isWeekDayAfterDate(weekStart, "MONDAY", wednesday)).toBe(false);
+  expect(isWeekDayAfterDate(weekStart, "TUESDAY", wednesday)).toBe(false);
+  expect(isWeekDayAfterDate(weekStart, "WEDNESDAY", wednesday)).toBe(false);
+  expect(isWeekDayAfterDate(weekStart, "THURSDAY", wednesday)).toBe(true);
+  expect(isWeekDayAfterDate(weekStart, "SUNDAY", wednesday)).toBe(true);
 });

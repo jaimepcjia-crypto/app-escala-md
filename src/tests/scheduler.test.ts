@@ -164,3 +164,22 @@ it("keeps a weekend calling pair inside the same team", () => {
   });
   expect(result.assignments.map((item) => item.brokerId).sort()).toEqual(["a", "b"]);
 });
+
+it("counts preserved assignments before redistributing the remaining week", () => {
+  const top = duty("top", "Melhor", 1);
+  const result = generateSchedule({
+    weekStart,
+    brokers: [
+      broker({ id: "worked", name: "Ja trabalhou", effortLevel: "HIGH" }),
+      broker({ id: "free", name: "Ainda livre", effortLevel: "HIGH" })
+    ],
+    dutyTypes: [top],
+    windows: [window("future", top.id, "THURSDAY")],
+    unavailabilities: [],
+    priorityByLocalName: new Map([["Melhor", 1]]),
+    initialAssignments: [
+      { brokerId: "worked", dayOfWeek: "MONDAY", startHour: 8, localName: "Melhor" }
+    ]
+  });
+  expect(result.assignments[0].brokerId).toBe("free");
+});

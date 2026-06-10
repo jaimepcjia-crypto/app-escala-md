@@ -125,8 +125,6 @@ export async function POST(request: NextRequest) {
   }
 
   if (body.action === "updateDutyPriorities") {
-    const workflow = weeklyWorkflowStatus();
-    if (!workflow.isOpen) return NextResponse.json({ error: "A prioridade da proxima escala so pode ser alterada no sabado ou domingo." }, { status: 403 });
     const items = (Array.isArray(body.items) ? body.items : []).filter((item: { localName?: string }) => String(item.localName ?? "").trim());
     await prisma.$transaction(
       items.map((item: { localName?: string; position?: number }, index: number) =>

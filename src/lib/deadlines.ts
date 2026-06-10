@@ -64,6 +64,10 @@ export function dateForWeekDay(weekStart: Date, dayOfWeek: DayOfWeek | string) {
   return addDays(weekStart, dayOffset[dayOfWeek as DayOfWeek] ?? 0);
 }
 
+export function isWeekDayAfterDate(weekStart: Date, dayOfWeek: DayOfWeek | string, boundary: Date) {
+  return dateForWeekDay(weekStart, dayOfWeek) > parseDateOnly(boundary);
+}
+
 export function currentSaoPauloDate(now = new Date()) {
   const parts = saoPauloParts(now);
   return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));

@@ -6,6 +6,7 @@ describe("directOperationalAction", () => {
     expect(directOperationalAction("publique a próxima escala")).toBe("GENERATE_AND_PUBLISH");
     expect(directOperationalAction("verifique o NÃO PODE")).toBe("CHECK_UNAVAILABILITY");
     expect(directOperationalAction("cancele a publicação")).toBe("CANCEL_PUBLICATION");
+    expect(directOperationalAction("redistribua o restante da semana com mais harmonia")).toBe("REGENERATE_MORE_BALANCED");
   });
 
   it("não transforma dúvidas em ações", () => {

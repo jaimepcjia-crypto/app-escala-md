@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { dateForWeekDay } from "@/lib/deadlines";
+import { currentSaoPauloDate, dateForWeekDay, isWeekDayAfterDate } from "@/lib/deadlines";
 import { DAYS } from "@/lib/constants";
 import { effortLevelLabel, isEffortLevel } from "@/lib/effort-level";
 
@@ -40,6 +40,12 @@ export function hardConstraintReasons(input: {
   if (input.requiresExternal && !input.canExternalDuty) reasons.push(`${input.brokerName}: corretor sem autorizacao para plantao externo.`);
   if (input.simultaneousCount > 1) reasons.push(`${input.brokerName}: corretor ficaria em dois plantoes no mesmo horario.`);
   return reasons;
+}
+
+export function workedDayConstraintReason(weekStart: Date, dayOfWeek: string, today = currentSaoPauloDate()) {
+  return isWeekDayAfterDate(weekStart, dayOfWeek, today)
+    ? null
+    : "Plantao ja realizado ou pertencente ao dia atual; somente dias seguintes podem ser alterados.";
 }
 
 function normalize(value?: string | null) {
@@ -221,6 +227,11 @@ async function validateResolvedChanges(
     });
 
   for (const change of changes) {
+    const workedDayReason = workedDayConstraintReason(schedule.weekStart, change.dayOfWeek);
+    if (workedDayReason) {
+      hardBlocks.push(`${formatChange(change)}: ${workedDayReason}`);
+      continue;
+    }
     if (!change.newBrokerId) continue;
     const assignment = schedule.assignments.find((item) => item.id === change.assignmentId)!;
     const broker = brokerById.get(change.newBrokerId);

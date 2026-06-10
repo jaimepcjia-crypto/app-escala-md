@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hardConstraintReasons } from "@/lib/ai-schedule-changes";
+import { hardConstraintReasons, workedDayConstraintReason } from "@/lib/ai-schedule-changes";
 import { PATCH } from "@/app/api/escala/ajustar/route";
 
 describe("travas absolutas de mudancas pedidas pela IA", () => {
@@ -49,4 +49,12 @@ it("desativa o antigo endpoint de edicao direta da escala", async () => {
   await expect(response.json()).resolves.toMatchObject({
     error: expect.stringContaining("IA")
   });
+});
+
+it("impede a IA de alterar passado e o dia atual", () => {
+  const weekStart = new Date("2026-06-08T00:00:00.000Z");
+  const wednesday = new Date("2026-06-10T00:00:00.000Z");
+  expect(workedDayConstraintReason(weekStart, "MONDAY", wednesday)).toContain("ja realizado");
+  expect(workedDayConstraintReason(weekStart, "WEDNESDAY", wednesday)).toContain("dia atual");
+  expect(workedDayConstraintReason(weekStart, "THURSDAY", wednesday)).toBeNull();
 });

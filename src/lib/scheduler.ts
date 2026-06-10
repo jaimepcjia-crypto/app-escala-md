@@ -41,6 +41,12 @@ type EngineInput = {
   weekStart: Date;
   balanceMode?: "NORMAL" | "MORE_BALANCED";
   deprioritizeBrokerIds?: string[];
+  initialAssignments?: Array<{
+    brokerId: string;
+    dayOfWeek: DayOfWeek | string;
+    startHour: number;
+    localName: string;
+  }>;
 };
 
 function hashSeed(value: string) {
@@ -248,6 +254,11 @@ export function generateSchedule(input: EngineInput) {
   function recordAssignment(brokerId: string, localName: string) {
     effortLocalCounts.set(effortCountKey(brokerId, localName), (effortLocalCounts.get(effortCountKey(brokerId, localName)) ?? 0) + 1);
     if (worstLocalNames.has(localName)) effortBottomCounts.set(brokerId, (effortBottomCounts.get(brokerId) ?? 0) + 1);
+  }
+
+  for (const assignment of input.initialAssignments ?? []) {
+    weekCounts.set(assignment.brokerId, (weekCounts.get(assignment.brokerId) ?? 0) + 1);
+    recordAssignment(assignment.brokerId, assignment.localName);
   }
 
   for (const window of sortedWindows) {
