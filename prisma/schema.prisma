@@ -63,6 +63,15 @@ model DutyPriority {
   updatedAt DateTime @updatedAt
 }
 
+// Decisões do gerente: "este nome do XLSX é, na verdade, o plantão X" (renome/erro de grafia).
+// alias é o nome normalizado vindo do XLSX; canonicalName é o DutyType.name escolhido.
+model PlantaoNameAlias {
+  id            String   @id @default(cuid())
+  alias         String   @unique
+  canonicalName String
+  createdAt     DateTime @default(now())
+}
+
 model WeeklyWindow {
   id          String    @id @default(cuid())
   weekStart   DateTime

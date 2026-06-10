@@ -21,6 +21,8 @@ type Snapshot = {
 type ArchiveImport = { id: string; weekStart: string; fileName: string; status: string; createdAt: string; summary: { total: number; ferreiraWindows: number; external: number } };
 type ArchiveSchedule = { id: string; weekStart: string; status: string; publishedAt?: string | null; importFileName?: string | null };
 type ArchivePayload = { imports: ArchiveImport[]; schedules: ArchiveSchedule[]; brokers: BrokerSnapshot[]; managerEmail: string };
+type ImportChangeSummary = { added: string[]; removed: string[]; timeChanged: Array<{ localName: string; from: number[]; to: number[] }> };
+type PendingReconciliation = { rawName: string; suggestion?: string };
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -46,6 +48,10 @@ export default function AdminPage() {
   const [newBroker, setNewBroker] = useState({ name: "", email: "", initialPassword: "", canExternalDuty: true, active: true });
   const [managerPassword, setManagerPassword] = useState({ currentPassword: "", newPassword: "" });
   const [priorityNotice, setPriorityNotice] = useState("");
+  const [pendingReconciliation, setPendingReconciliation] = useState<PendingReconciliation[] | null>(null);
+  const [pendingImportId, setPendingImportId] = useState<string | null>(null);
+  const [changeSummary, setChangeSummary] = useState<ImportChangeSummary | null>(null);
+  const [reconciliationDecisions, setReconciliationDecisions] = useState<Record<string, string>>({});
   const priorityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -102,12 +108,53 @@ export default function AdminPage() {
       const response = await authenticatedFetch("/api/escala/importar", { method: "POST", body: formData });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Falha ao validar o XLSX.");
-      setNotice(`Arquivo validado: ${payload.summary.ferreiraWindows} janelas Ferreira e ${payload.summary.external} externas.`);
+      
+      // Mostra resumo de mudanças se houver.
+      if (payload.changeSummary) {
+        setChangeSummary(payload.changeSummary);
+      }
+      
+      // Se há nomes ambíguos, mostra painel de reconciliação.
+      if (payload.pendingReconciliation && payload.pendingReconciliation.length > 0) {
+        setPendingReconciliation(payload.pendingReconciliation);
+        setPendingImportId(payload.import.id);
+        setReconciliationDecisions({});
+        setNotice(`${payload.pendingReconciliation.length} nome(s) ambíguo(s) detectado(s). Confirme ou marque como novo.`);
+      } else {
+        // Sem ambiguidade, finaliza normalmente.
+        setNotice(`Arquivo validado: ${payload.summary.ferreiraWindows} janelas Ferreira e ${payload.summary.external} externas.`);
+        setPendingReconciliation(null);
+        setPendingImportId(null);
+        if (!payload.changeSummary) setChangeSummary(null);
+      }
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Falha ao validar o XLSX.");
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
+      setBusy(false);
+    }
+  }
+
+  async function submitReconciliation(importId: string) {
+    try {
+      setBusy(true);
+      setNotice("Finalizando reconciliação...");
+      const response = await authenticatedFetch("/api/escala/importar/reconciliar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importId, decisions: reconciliationDecisions })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Falha ao reconciliar.");
+      setNotice(`Reconciliação concluída: ${payload.summary.ferreiraWindows} janelas Ferreira e ${payload.summary.external} externas.`);
+      setPendingReconciliation(null);
+      setPendingImportId(null);
+      setReconciliationDecisions({});
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Falha ao reconciliar.");
+    } finally {
       setBusy(false);
     }
   }
@@ -120,6 +167,10 @@ export default function AdminPage() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "Falha ao excluir arquivo.");
       setNotice("Arquivo excluido. Voce pode enviar outro XLSX.");
+      setPendingReconciliation(null);
+      setPendingImportId(null);
+      setReconciliationDecisions({});
+      setChangeSummary(null);
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Falha ao excluir arquivo.");
@@ -224,7 +275,8 @@ export default function AdminPage() {
 
   const workflow = snapshot?.workflow;
   const importsForWeek = archive?.imports.filter((item) => item.weekStart === workflow?.weekStart) ?? [];
-  const currentImport = importsForWeek.find((item) => item.status === "CONFIRMED") ?? null;
+  const currentImport = importsForWeek.find((item) => item.status === "PENDING_RECONCILIATION") ?? importsForWeek.find((item) => item.status === "CONFIRMED") ?? null;
+  const currentImportStatusLabel = currentImport?.status === "PENDING_RECONCILIATION" ? "Aguardando reconciliação" : "Validado";
   const published = snapshot?.schedules.some((item) => item.status === "PUBLISHED") ?? false;
   const currentSchedulePublished = archive?.schedules.some((item) => item.weekStart === workflow?.currentWeekStart && item.status === "PUBLISHED") ?? false;
 
@@ -250,7 +302,7 @@ export default function AdminPage() {
           <div className="grid border-t border-graphite/10 bg-white/45 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Escala em vigor" value={currentSchedulePublished ? "Publicada" : "Não publicada"} ok={currentSchedulePublished} />
             <Metric label="Indisponibilidades" value={`${snapshot?.readiness.confirmed ?? 0}/${snapshot?.readiness.totalFerreiraBrokers ?? 0}`} ok={Boolean(snapshot?.readiness.allConfirmed)} />
-            <Metric label="Arquivo da próxima escala" value={currentImport ? "Validado" : "Ainda não enviado"} ok={Boolean(currentImport)} />
+            <Metric label="Arquivo da próxima escala" value={currentImport ? currentImportStatusLabel : "Ainda não enviado"} ok={Boolean(currentImport)} />
             <Metric label="Próxima escala" value={published ? "Publicada" : "Ainda não publicada"} ok={published} />
           </div>
         </section>
@@ -274,9 +326,15 @@ export default function AdminPage() {
               {currentImport ? (
                 <div className="mt-4 rounded-xl border border-moss/25 bg-moss/10 p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div><strong className="ui-font text-sm">{currentImport.fileName}</strong><p className="ui-font mt-1 text-xs text-graphite">{currentImport.summary.ferreiraWindows} janelas Ferreira · {currentImport.summary.external} externas</p></div>
+                    <div>
+                      <strong className="ui-font text-sm">{currentImport.fileName}</strong>
+                      <p className="ui-font mt-1 text-xs text-graphite">{currentImport.summary.ferreiraWindows} janelas Ferreira · {currentImport.summary.external} externas</p>
+                    </div>
                     <CheckCircle2 className="text-moss" size={20} />
                   </div>
+                  {currentImport.status === "PENDING_RECONCILIATION" ? (
+                    <p className="ui-font mt-3 rounded-lg border border-signal/20 bg-signal/10 px-3 py-2 text-xs text-signal">Aguardando confirmação de nomes ambíguos antes de finalizar.</p>
+                  ) : null}
                   {!published ? <button className="ui-font mt-3 inline-flex items-center gap-2 rounded-full border border-signal/25 px-3 py-1.5 text-xs font-bold text-signal" onClick={() => deleteImport(currentImport.id)}><Trash2 size={13} /> Excluir e trocar</button> : null}
                 </div>
               ) : (
@@ -291,6 +349,96 @@ export default function AdminPage() {
             <AiCard command={iaCommand} setCommand={setIaCommand} answer={iaAnswer} busy={iaBusy} pending={Boolean(iaPendingRequestId)} hasWarnings={iaPendingHasWarnings} ask={askIa} />
           </section>
         )}
+
+        {pendingReconciliation && pendingReconciliation.length > 0 ? (
+          <section className="panel rounded-2xl p-4">
+            <h2 className="text-lg font-semibold">🔄 Reconciliação de nomes de plantão</h2>
+            <p className="ui-font mt-2 text-sm text-graphite">Alguns nomes no XLSX parecem semelhantes a plantões conhecidos. Decida para cada um: é novo ou é o mesmo?</p>
+            <div className="mt-4 grid gap-3">
+              {pendingReconciliation.map((item) => (
+                <div key={item.rawName} className="rounded-lg border border-sand/40 bg-sand/10 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <p className="font-mono text-sm font-bold">{item.rawName}</p>
+                      {item.suggestion ? (
+                        <p className="ui-font mt-1 text-xs text-graphite">Parece ser: <span className="font-semibold">{item.suggestion}</span></p>
+                      ) : null}
+                    </div>
+                    <div className="flex gap-2">
+                      {item.suggestion ? (
+                        <button
+                          className="ui-font rounded-full border border-moss/40 bg-moss/10 px-3 py-1.5 text-xs font-bold text-moss hover:bg-moss/20"
+                          onClick={() => setReconciliationDecisions({ ...reconciliationDecisions, [item.rawName]: item.suggestion! })}
+                        >
+                          {reconciliationDecisions[item.rawName] === item.suggestion ? "✓ Sim" : "Confirmar"}
+                        </button>
+                      ) : null}
+                      <button
+                        className="ui-font rounded-full border border-signal/40 bg-signal/10 px-3 py-1.5 text-xs font-bold text-signal hover:bg-signal/20"
+                        onClick={() => setReconciliationDecisions({ ...reconciliationDecisions, [item.rawName]: "NEW" })}
+                      >
+                        {reconciliationDecisions[item.rawName] === "NEW" ? "✓ Novo" : "É novo"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {Object.keys(reconciliationDecisions).length === pendingReconciliation.length ? (
+              <button
+                className="action-primary mt-4 w-full"
+                onClick={() => submitReconciliation(pendingImportId!)}
+                disabled={busy}
+              >
+                {busy ? <Loader2 className="inline animate-spin" size={15} /> : "✓"} Confirmar decisões e finalizar
+              </button>
+            ) : (
+              <p className="ui-font mt-4 text-sm text-graphite">Decida para todos os {pendingReconciliation.length} nome(s) antes de confirmar.</p>
+            )}
+          </section>
+        ) : null}
+
+        {changeSummary ? (
+          <section className="panel rounded-2xl p-4">
+            <h2 className="text-lg font-semibold">📊 Resumo de mudanças na escala</h2>
+            <div className="mt-4 grid gap-3">
+              {changeSummary.added.length > 0 ? (
+                <div className="rounded-lg border border-sand/40 bg-sand/10 p-3">
+                  <p className="ui-font font-bold text-sand">🆕 <strong>{changeSummary.added.length}</strong> plantão(ões) novo(s):</p>
+                  <ul className="ui-font mt-2 ml-4 list-disc text-sm text-graphite">
+                    {changeSummary.added.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                  <p className="ui-font mt-2 text-xs text-sand">⚠️ <strong>Posicione na régua de prioridades</strong> antes de gerar a escala.</p>
+                </div>
+              ) : null}
+              {changeSummary.removed.length > 0 ? (
+                <div className="rounded-lg border border-graphite/25 bg-graphite/10 p-3">
+                  <p className="ui-font font-bold text-graphite">❌ <strong>{changeSummary.removed.length}</strong> plantão(ões) removido(s):</p>
+                  <ul className="ui-font mt-2 ml-4 list-disc text-sm text-graphite">
+                    {changeSummary.removed.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {changeSummary.timeChanged.length > 0 ? (
+                <div className="rounded-lg border border-signal/40 bg-signal/10 p-3">
+                  <p className="ui-font font-bold text-signal">🕐 <strong>{changeSummary.timeChanged.length}</strong> plantão(ões) com horário alterado:</p>
+                  <ul className="ui-font mt-2 ml-4 space-y-1 text-sm text-graphite">
+                    {changeSummary.timeChanged.map((item) => (
+                      <li key={item.localName}>
+                        <strong>{item.localName}</strong>: {item.from.join(", ")}h → {item.to.join(", ")}h
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="ui-font mt-2 text-xs text-signal">⚠️ <strong>Revise os NÃO PODE dos corretores</strong> nesse novo horário.</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {!workflow?.isOpen ? (
           <section className="grid gap-4 xl:grid-cols-2">
