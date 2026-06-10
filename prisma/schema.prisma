@@ -19,6 +19,7 @@ model Broker {
   name              String               @unique
   canExternalDuty   Boolean              @default(true)
   active            Boolean              @default(true)
+  effortLevel       String?
   teamId            String
   team              Team                 @relation(fields: [teamId], references: [id])
   unavailabilities  Unavailability[]
@@ -26,7 +27,6 @@ model Broker {
   historyTotal      HistoryTotal?
   user              User?
   confirmations     UnavailabilityConfirmation[]
-  monthlySales      BrokerMonthlySale[]
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 }
@@ -53,18 +53,6 @@ model DutyType {
   isCalling         Boolean              @default(false)
   windows           WeeklyWindow[]
   assignments       ScheduleAssignment[]
-}
-
-model BrokerMonthlySale {
-  id          String   @id @default(cuid())
-  monthStart  DateTime
-  amountCents BigInt   @default(100)
-  brokerId    String
-  broker      Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([monthStart, brokerId])
 }
 
 model DutyPriority {
@@ -131,7 +119,6 @@ model AiScheduleReview {
   model           String?
   status          String   @default("DISABLED")
   summary         String
-  meritocracy     String?
   balance         String?
   conflicts       String?
   recommendations String   @default("[]")

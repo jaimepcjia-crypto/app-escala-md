@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, Clock3, Copy, Download, FileSpreadsheet, GripVertical, KeyRound, Loader2, LockKeyhole, Plus, RefreshCw, Trash2, UploadCloud, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { BrokersSalesPanel, accessUrlFor, type BrokerSnapshot, type BrokerSavePatch } from "@/components/BrokersSalesPanel";
+import { BrokersPanel, accessUrlFor, type BrokerSnapshot, type BrokerSavePatch } from "@/components/BrokersPanel";
 import { StatusPill } from "@/components/StatusPill";
 import { authenticatedDownload, authenticatedFetch } from "@/lib/client-auth";
+import type { EffortLevel } from "@/lib/effort-level";
 
 type Workflow = { isOpen: boolean; daysUntilOpen: number; currentWeekStart: string; currentWeekEnd: string; weekStart: string; weekEnd: string; opensOn: string; closesOn: string };
 type Snapshot = {
   weekStart: string;
-  salesMonthStart: string;
   brokers: BrokerSnapshot[];
   schedules: Array<{ id: string; status: "DRAFT" | "PUBLISHED"; publishedAt?: string | null }>;
   readiness: { totalFerreiraBrokers: number; confirmed: number; allConfirmed: boolean };
@@ -20,7 +20,7 @@ type Snapshot = {
 };
 type ArchiveImport = { id: string; weekStart: string; fileName: string; status: string; createdAt: string; summary: { total: number; ferreiraWindows: number; external: number } };
 type ArchiveSchedule = { id: string; weekStart: string; status: string; publishedAt?: string | null; importFileName?: string | null };
-type ArchivePayload = { imports: ArchiveImport[]; schedules: ArchiveSchedule[]; brokers: BrokerSnapshot[]; salesMonthStart: string; managerEmail: string };
+type ArchivePayload = { imports: ArchiveImport[]; schedules: ArchiveSchedule[]; brokers: BrokerSnapshot[]; managerEmail: string };
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -30,7 +30,7 @@ function formatDate(value?: string | null) {
 
 function reservationSummary(items: Array<{ localName: string }>) {
   if (!items.length) return "Envie o XLSX no fim de semana para listar os plantoes.";
-  return `Reservas: 1o/2o concorrem a 40% de ${items[0]?.localName ?? "-"}; 3o/4o a 40% de ${items[1]?.localName ?? "-"}; 5o/6o a 40% de ${items[2]?.localName ?? "-"}.`;
+  return `Prioridades atualizadas. As metas internas usarão os dois melhores e os dois piores plantões desta ordem.`;
 }
 
 export default function AdminPage() {
@@ -186,9 +186,9 @@ export default function AdminPage() {
     catch (error) { setNotice(error instanceof Error ? error.message : "Falha ao excluir corretor."); }
   }
 
-  async function updateMonthlySale(broker: BrokerSnapshot, amountReais: string) {
-    try { await postAdmin({ action: "updateMonthlySale", brokerId: broker.id, amountReais }); setNotice("Venda atualizada."); await load(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Falha ao atualizar venda."); }
+  async function updateEffortLevel(broker: BrokerSnapshot, effortLevel: EffortLevel) {
+    try { await postAdmin({ action: "updateEffortLevel", brokerId: broker.id, effortLevel }); setNotice(`Nível de esforço de ${broker.name} atualizado.`); await load(); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "Falha ao atualizar nível de esforço."); }
   }
 
   async function changeManagerPassword() {
@@ -290,8 +290,8 @@ export default function AdminPage() {
 
         <div className="grid gap-3">
           <details className="panel rounded-2xl p-4">
-            <summary className="ui-font cursor-pointer font-bold">Corretores, logins e vendas</summary>
-            <div className="mt-4"><BrokersSalesPanel brokers={archive?.brokers ?? []} salesMonthStart={archive?.salesMonthStart} onSave={updateBroker} onSaleSave={updateMonthlySale} onDelete={deleteBroker} /></div>
+            <summary className="ui-font cursor-pointer font-bold">Corretores, logins e nível de esforço</summary>
+            <div className="mt-4"><BrokersPanel brokers={archive?.brokers ?? []} onSave={updateBroker} onEffortSave={updateEffortLevel} onDelete={deleteBroker} /></div>
           </details>
           <details className="panel rounded-2xl p-4">
             <summary className="ui-font cursor-pointer font-bold">Novo corretor e segurança</summary>

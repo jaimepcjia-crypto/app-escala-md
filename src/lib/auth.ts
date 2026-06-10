@@ -119,7 +119,7 @@ export async function getCurrentUserFromCookies() {
   if (!session) return null;
   return prisma.user.findUnique({
     where: { id: session.userId },
-    include: { broker: { include: { team: true } } }
+    include: { broker: { select: { id: true, name: true, team: { select: { name: true, isFerreira: true } } } } }
   });
 }
 
@@ -138,7 +138,7 @@ export async function requireUser(request: NextRequest) {
   if (!session) return { error: NextResponse.json({ error: "Login necessario." }, { status: 401 }) };
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    include: { broker: { include: { team: true } } }
+    include: { broker: { select: { id: true, name: true, team: { select: { name: true, isFerreira: true } } } } }
   });
   if (!user) return { error: NextResponse.json({ error: "Sessao invalida." }, { status: 401 }) };
   return { session, user };

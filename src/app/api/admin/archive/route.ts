@@ -40,7 +40,6 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     brokers: snapshot.brokers,
-    salesMonthStart: snapshot.salesMonthStart,
     managerEmail: snapshot.managerEmail,
     imports: imports.map((item) => ({
       id: item.id,

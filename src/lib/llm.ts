@@ -11,14 +11,13 @@ type LlmReviewInput = {
   weekStart: Date;
   assignments: ReviewAssignment[];
   conflicts: Array<{ dutyType: string; dayOfWeek: string; shift: string; reason: string; suggestions: string[] }>;
-  brokerStats: Array<{ name: string; salesRank: number | null; total: number; external: number; headquarters: number; calling: number }>;
+  brokerStats: Array<{ name: string; total: number; external: number; headquarters: number; calling: number }>;
 };
 
 type LlmReviewResult = {
   model: string | null;
   status: "OK" | "DISABLED" | "ERROR";
   summary: string;
-  meritocracy?: string | null;
   balance?: string | null;
   conflicts?: string | null;
   rawJson?: string | null;
@@ -98,12 +97,11 @@ function compactAssignment(assignment: ReviewAssignment) {
 }
 
 export function buildBrokerStats(assignments: ReviewAssignment[]) {
-  const rows = new Map<string, { name: string; salesRank: number | null; total: number; external: number; headquarters: number; calling: number }>();
+  const rows = new Map<string, { name: string; total: number; external: number; headquarters: number; calling: number }>();
   for (const assignment of assignments) {
     if (!assignment.brokerId || !assignment.broker || assignment.assignmentType === "EXTERNAL_IMPORTED") continue;
     const current = rows.get(assignment.brokerId) ?? {
       name: assignment.broker.name,
-      salesRank: null,
       total: 0,
       external: 0,
       headquarters: 0,
@@ -118,27 +116,6 @@ export function buildBrokerStats(assignments: ReviewAssignment[]) {
   return [...rows.values()].sort((left, right) => right.total - left.total || left.name.localeCompare(right.name));
 }
 
-export function buildBrokerStatsWithRanks(assignments: ReviewAssignment[], rankByBrokerId: Map<string, number>) {
-  const rows = new Map<string, { name: string; salesRank: number | null; total: number; external: number; headquarters: number; calling: number }>();
-  for (const assignment of assignments) {
-    if (!assignment.brokerId || !assignment.broker || assignment.assignmentType === "EXTERNAL_IMPORTED") continue;
-    const current = rows.get(assignment.brokerId) ?? {
-      name: assignment.broker.name,
-      salesRank: rankByBrokerId.get(assignment.brokerId) ?? null,
-      total: 0,
-      external: 0,
-      headquarters: 0,
-      calling: 0
-    };
-    current.total += 1;
-    if (assignment.dutyType.requiresExternal) current.external += 1;
-    if (assignment.dutyType.isHeadquarters) current.headquarters += 1;
-    if (assignment.dutyType.isCalling) current.calling += 1;
-    rows.set(assignment.brokerId, current);
-  }
-  return [...rows.values()].sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999) || right.total - left.total || left.name.localeCompare(right.name));
-}
-
 export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmReviewResult> {
   const { apiKey, model } = getLlmConfig();
   if (!apiKey) {
@@ -146,7 +123,6 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       model: null,
       status: "DISABLED",
       summary: "IA nao configurada. Defina OPENAI_API_KEY para ativar a analise da escala.",
-      meritocracy: null,
       balance: null,
       conflicts: null,
       rawJson: null,
@@ -160,10 +136,9 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
       "Disponibilidade e permissao externa sao travas duras.",
       "A escala ja foi gerada pelo motor deterministico; a LLM deve auditar e sugerir melhorias, nao inventar regras.",
       "Cores/janelas roxas sao do gerente Ferreira; demais plantões importados sao externos e preservados.",
-      "Meritocracia usa faixas reais de vendas e reservas nos tres melhores plantoes.",
       "O gerente somente pode alterar atribuicoes por pedido a IA, com analise e confirmacao; mudancas confirmadas devem mostrar o impacto no balanceamento.",
-      "Se todos estiverem com venda padrao R$ 1,00 ou empatados, explique que vendas nao favorecem nenhum corretor individualmente.",
-      "Nao use nomes tecnicos de campos do sistema, como salesRank, assignmentType, null ou JSON."
+      "Existe um criterio interno privado do gerente, mas ele nunca pode ser mencionado, inferido ou exposto nesta analise publica.",
+      "Nao use nomes tecnicos de campos do sistema, como assignmentType, null ou JSON."
     ],
     estatisticasCorretores: input.brokerStats,
     conflitosDoMotor: input.conflicts,
@@ -176,29 +151,26 @@ export async function reviewScheduleWithLlm(input: LlmReviewInput): Promise<LlmR
   try {
     const result = await requestLlmJson<{
       summary: string;
-      meritocracy: string;
       balance: string;
       conflicts: string;
     }>({
       system:
-        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. meritocracy deve explicar se a regra de vendas foi aplicada ou se houve empate real, caso em que vendas nao favorecem nenhum corretor individualmente. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. Retorne somente JSON valido com as chaves: summary, meritocracy, balance, conflicts.",
+        "Voce e a IA auditora de escala imobiliaria do gerente Ferreira. Responda em portugues do Brasil, com linguagem de gerente, sem termos tecnicos de banco ou codigo. Nunca mencione classificacoes internas privadas. A primeira frase de summary deve deixar claro se a escala foi publicada, se ha pendencias e quantas. balance deve falar apenas da distribuicao dos corretores da equipe Ferreira. conflicts deve ser curto e operacional. Retorne somente JSON valido com as chaves: summary, balance, conflicts.",
       user: JSON.stringify(payload),
       schema: {
         type: "OBJECT",
         properties: {
           summary: { type: "STRING" },
-          meritocracy: { type: "STRING" },
           balance: { type: "STRING" },
           conflicts: { type: "STRING" }
         },
-        required: ["summary", "meritocracy", "balance", "conflicts"]
+        required: ["summary", "balance", "conflicts"]
       }
     });
     return {
       model: result.model,
       status: "OK",
       summary: result.parsed.summary,
-      meritocracy: result.parsed.meritocracy,
       balance: result.parsed.balance,
       conflicts: result.parsed.conflicts,
       rawJson: result.rawJson,

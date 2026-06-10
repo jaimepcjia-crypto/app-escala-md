@@ -11,8 +11,6 @@ import { currentSaoPauloWeekStart } from "@/lib/deadlines";
 import { authenticatedFetch, setTabSessionToken } from "@/lib/client-auth";
 
 type PublicData = {
-  salesMonthLabel?: string;
-  salesYear?: number;
   weekStart?: string;
   schedule: null | {
     id: string;
@@ -26,10 +24,6 @@ type PublicData = {
   brokers: Array<{
     id: string;
     name: string;
-    salesRank: number | null;
-    salesRankLabel?: string | null;
-    currentMonthSalesReais?: string;
-    currentYearSalesReais?: string;
     team: { name: string; isFerreira?: boolean };
   }>;
 };
@@ -42,7 +36,7 @@ function normalizeWeekInput(value: string) {
   return normalizeWeekStart(value).toISOString().slice(0, 10);
 }
 
-export default function SalesRankingPage() {
+export default function SchedulePage() {
   const [data, setData] = useState<PublicData | null>(null);
   const [me, setMe] = useState<any>(null);
   const [weekStart, setWeekStart] = useState(currentWeekStart());
@@ -90,34 +84,9 @@ export default function SalesRankingPage() {
   }, [me, isManager, weekStart]);
 
   const schedule = data?.schedule ?? null;
-  const rankedBrokers = [...(data?.brokers ?? [])]
-    .filter((broker) => broker.salesRank)
-    .sort((left, right) => (left.salesRank ?? 9999) - (right.salesRank ?? 9999));
-
   return (
     <AppShell active="escala">
       <div className="flex flex-col gap-5">
-        <section className="panel rounded-2xl p-4">
-          <div className="grid gap-4 lg:grid-cols-[240px_1fr] lg:items-center">
-            <div>
-              <p className="eyebrow">Ranking de vendas</p>
-              <h2 className="mt-1 text-xl font-semibold">Destaques do mês</h2>
-              <p className="ui-font mt-1 text-xs text-graphite">
-                {data?.salesMonthLabel ?? ""} · valores em R$
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {rankedBrokers.slice(0, 3).map((broker) => <RankingLine key={broker.id} broker={broker} />)}
-            </div>
-          </div>
-          <details className="mt-3 border-t border-graphite/10 pt-3">
-            <summary className="ui-font cursor-pointer text-xs font-bold text-signal">Ver ranking completo</summary>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {rankedBrokers.map((broker) => <RankingLine key={broker.id} broker={broker} />)}
-            </div>
-          </details>
-        </section>
-
         <section className="grid gap-4">
           <div className="hero-panel rounded-[26px] p-5 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -171,7 +140,7 @@ export default function SalesRankingPage() {
             <p className="ui-font text-xs font-bold uppercase tracking-[0.16em] text-signal">Memorando</p>
             <h2 className="text-xl font-bold">Como os plantões são distribuídos</h2>
             <p className="ui-font mt-1 text-xs text-graphite">
-              Critérios configurados no sistema e o peso aproximado de cada um, do mais forte ao de desempate.
+              Regras públicas de segurança e equilíbrio usadas pelo motor.
             </p>
           </div>
 
@@ -194,26 +163,19 @@ export default function SalesRankingPage() {
               </div>
               <ul className="space-y-2 text-graphite">
                 <li>
-                  <strong className="text-ink">1) Vendas (meritocracia) — <span className="text-signal">70%</span> · o critério mais forte.</strong>{" "}
-                  Quem vende mais tem preferência, principalmente nos melhores plantões. Os <strong>3 plantões
-                  mais valiosos</strong> reservam <strong>40%</strong> das vagas às melhores faixas de vendas
-                  (1º/2º lugar no melhor; 3º/4º no segundo; 5º/6º no terceiro). Se todos estiverem empatados
-                  em vendas, esse critério não favorece ninguém.
-                </li>
-                <li>
-                  <strong className="text-ink">2) Equilíbrio entre os corretores — <span className="text-signal">15%</span> · peso médio.</strong> Quem já
+                  <strong className="text-ink">1) Equilíbrio entre os corretores.</strong> Quem já
                   pegou mais plantões no geral cede a vez, para a distribuição ficar justa.
                 </li>
                 <li>
-                  <strong className="text-ink">3) Não concentrar o mesmo tipo de plantão — <span className="text-signal">5%</span> · peso médio-baixo.</strong>{" "}
+                  <strong className="text-ink">2) Não concentrar o mesmo tipo de plantão.</strong>{" "}
                   Evita que sempre o mesmo corretor pegue o mesmo tipo de plantão.
                 </li>
                 <li>
-                  <strong className="text-ink">4) Espalhar ao longo da semana — <span className="text-signal">7%</span> · peso médio.</strong> Evita
+                  <strong className="text-ink">3) Espalhar ao longo da semana.</strong> Evita
                   acumular muitos plantões do mesmo corretor na mesma semana.
                 </li>
                 <li>
-                  <strong className="text-ink">5) Desempate justo — <span className="text-signal">3%</span>.</strong> Quando dá empate, um sorteio leve
+                  <strong className="text-ink">4) Desempate justo.</strong> Quando dá empate, um sorteio leve
                   decide, sem favorecer ninguém.
                 </li>
               </ul>
@@ -227,15 +189,5 @@ export default function SalesRankingPage() {
         </section>
       </div>
     </AppShell>
-  );
-}
-
-function RankingLine({ broker }: { broker: PublicData["brokers"][number] }) {
-  return (
-    <div className="ui-font flex items-center gap-3 rounded-xl border border-graphite/10 bg-paper/70 p-3 text-xs">
-      <span className="rounded-lg bg-ink px-2 py-1 font-bold text-paper">{broker.salesRankLabel ?? `${broker.salesRank}o`}</span>
-      <span className="min-w-0 flex-1 truncate font-bold">{broker.name}</span>
-      <strong>{broker.currentMonthSalesReais ?? "R$ 1,00"}</strong>
-    </div>
   );
 }

@@ -3,17 +3,13 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Trash2 } from "lucide-react";
 import { StatusPill } from "@/components/StatusPill";
+import { EFFORT_LEVEL_LABELS, EFFORT_LEVELS, type EffortLevel } from "@/lib/effort-level";
 
 export type BrokerSnapshot = {
   id: string;
   name: string;
   user?: { email: string; passwordPlain?: string | null } | null;
-  salesAmountReais: string;
-  salesRank: number | null;
-  salesRankLabel: string;
-  salesTieSize: number;
-  salesOrdinalStart: number | null;
-  salesOrdinalEnd: number | null;
+  effortLevel: EffortLevel | null;
   autoHistoryTotal: number;
   canExternalDuty: boolean;
   active: boolean;
@@ -34,24 +30,22 @@ export function accessUrlFor(email: string) {
   return `${origin}/login?email=${encodeURIComponent(email)}`;
 }
 
-export function BrokersSalesPanel({
+export function BrokersPanel({
   brokers,
-  salesMonthStart: _salesMonthStart,
   onSave,
-  onSaleSave,
+  onEffortSave,
   onDelete
 }: {
   brokers: BrokerSnapshot[];
-  salesMonthStart?: string;
   onSave: (broker: BrokerSnapshot, patch: BrokerSavePatch) => void | Promise<void>;
-  onSaleSave: (broker: BrokerSnapshot, amountReais: string) => void | Promise<void>;
+  onEffortSave: (broker: BrokerSnapshot, effortLevel: EffortLevel) => void | Promise<void>;
   onDelete: (broker: BrokerSnapshot) => void | Promise<void>;
 }) {
   return (
     <section className="panel rounded-lg p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Corretores, logins e vendas</h2>
+          <h2 className="text-xl font-bold">Corretores, logins e nível de esforço</h2>
           <p className="ui-font text-xs text-graphite">
             Email = login. Senha numerica (4-10 digitos), editavel. O link copia o acesso pessoal (abre o login com o email preenchido).
           </p>
@@ -65,8 +59,7 @@ export function BrokersSalesPanel({
             <col className="w-[17%]" />
             <col className="w-[9%]" />
             <col className="w-[9%]" />
-            <col className="w-[6%]" />
-            <col className="w-[11%]" />
+            <col className="w-[17%]" />
             <col className="w-[5%]" />
             <col className="w-[5%]" />
             <col className="w-[5%]" />
@@ -78,8 +71,7 @@ export function BrokersSalesPanel({
               <th className="whitespace-nowrap px-1.5 py-2">Email (login)</th>
               <th className="whitespace-nowrap px-1.5 py-2">Senha</th>
               <th className="whitespace-nowrap px-1.5 py-2">Equipe</th>
-              <th className="whitespace-nowrap px-1.5 py-2 text-center">Ranking</th>
-              <th className="whitespace-nowrap px-1.5 py-2">Vendas</th>
+              <th className="whitespace-nowrap px-1.5 py-2">Nível de esforço</th>
               <th className="whitespace-nowrap px-1.5 py-2 text-center">Hist.</th>
               <th className="whitespace-nowrap px-1.5 py-2 text-center">Ext.</th>
               <th className="whitespace-nowrap px-1.5 py-2 text-center">Ativo</th>
@@ -88,7 +80,7 @@ export function BrokersSalesPanel({
           </thead>
           <tbody>
             {brokers.map((broker) => (
-              <BrokerRow key={broker.id} broker={broker} onSave={onSave} onSaleSave={onSaleSave} onDelete={onDelete} />
+              <BrokerRow key={broker.id} broker={broker} onSave={onSave} onEffortSave={onEffortSave} onDelete={onDelete} />
             ))}
           </tbody>
         </table>
@@ -100,15 +92,14 @@ export function BrokersSalesPanel({
 function BrokerRow({
   broker,
   onSave,
-  onSaleSave,
+  onEffortSave,
   onDelete
 }: {
   broker: BrokerSnapshot;
   onSave: (broker: BrokerSnapshot, patch: BrokerSavePatch) => void | Promise<void>;
-  onSaleSave: (broker: BrokerSnapshot, amountReais: string) => void | Promise<void>;
+  onEffortSave: (broker: BrokerSnapshot, effortLevel: EffortLevel) => void | Promise<void>;
   onDelete: (broker: BrokerSnapshot) => void | Promise<void>;
 }) {
-  const [sale, setSale] = useState(broker.salesAmountReais);
   const [name, setName] = useState(broker.name);
   const [email, setEmail] = useState(broker.user?.email ?? "");
   const [password, setPassword] = useState(broker.user?.passwordPlain ?? "");
@@ -117,7 +108,6 @@ function BrokerRow({
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setSale(broker.salesAmountReais);
     setName(broker.name);
     setEmail(broker.user?.email ?? "");
     setPassword(broker.user?.passwordPlain ?? "");
@@ -147,12 +137,19 @@ function BrokerRow({
         <input className="control w-full rounded-md px-1.5 py-1 text-[11px]" inputMode="numeric" value={password} onChange={(event) => setPassword(event.target.value)} data-help="Senha numerica de acesso do corretor (4 a 10 digitos). Visivel e editavel." />
       </td>
       <td className="break-words px-1.5 py-1.5 leading-snug">{broker.team.name}</td>
-      <td className="px-1.5 py-1.5 text-center font-bold">{broker.salesRankLabel ?? "-"}</td>
-      <td className="px-1.5 py-1.5">
-        <div className="flex min-w-0 items-center gap-1">
-          <span>R$</span>
-          <input className="control min-w-0 flex-1 rounded-md px-1.5 py-1 text-[11px]" value={sale} onChange={(event) => setSale(event.target.value)} onBlur={() => onSaleSave(broker, sale)} data-help="Informa o total vendido no mes em reais. O ranking e recalculado automaticamente." />
-        </div>
+      <td className={`px-1.5 py-1.5 ${broker.active && !broker.effortLevel ? "bg-signal/10" : ""}`}>
+        <select
+          className="control w-full rounded-md px-1.5 py-1 text-[11px] font-bold"
+          value={broker.effortLevel ?? ""}
+          onChange={(event) => {
+            const value = event.target.value as EffortLevel;
+            if (value) void onEffortSave(broker, value);
+          }}
+          data-help="Classificação privada definida pelo gerente e usada somente nas próximas gerações."
+        >
+          <option value="">Não classificado</option>
+          {EFFORT_LEVELS.map((level) => <option key={level} value={level}>{EFFORT_LEVEL_LABELS[level]}</option>)}
+        </select>
       </td>
       <td className="px-1.5 py-1.5 text-center">{broker.autoHistoryTotal}</td>
       <td className="px-1.5 py-1.5 text-center"><input type="checkbox" checked={external} onChange={(event) => setExternal(event.target.checked)} data-help="Define se o corretor pode trabalhar fora da sede." /></td>

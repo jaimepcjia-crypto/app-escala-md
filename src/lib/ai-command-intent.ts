@@ -14,7 +14,7 @@ export function directOperationalAction(command: string): DirectOperationalActio
   if (/^(publique|gere|monte|crie)(\s+e\s+publique)?\b.*\bescala\b/.test(normalized)) return "GENERATE_AND_PUBLISH";
   if (/^(cancele|despublique|retire)\b.*\b(publicacao|escala publicada)\b/.test(normalized)) return "CANCEL_PUBLICATION";
   if (/^(verifique|confira|cheque)\b.*\b(nao pode|indisponibilidade|indisponibilidades)\b/.test(normalized)) return "CHECK_UNAVAILABILITY";
-  if (/^(explique|analise|avalie)\b.*\b(justica|distribuicao|meritocracia|equilibrio)\b/.test(normalized)) return "EXPLAIN_FAIRNESS";
+  if (/^(explique|analise|avalie)\b.*\b(justica|distribuicao|equilibrio)\b/.test(normalized)) return "EXPLAIN_FAIRNESS";
   if (/^(regenere|refaca|gere novamente)\b.*\b(equilibrio|equilibrada|balanceada)\b/.test(normalized)) return "REGENERATE_MORE_BALANCED";
   return null;
 }

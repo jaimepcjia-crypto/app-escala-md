@@ -38,7 +38,7 @@ export default function LoginPage() {
         <div className="bg-ink p-7 text-paper sm:p-10">
           <p className="eyebrow !text-sand">Escala MD</p>
           <h1 className="mt-5 text-4xl font-semibold leading-tight sm:text-5xl">Decisões semanais com clareza e equilíbrio.</h1>
-          <p className="ui-font mt-5 max-w-sm text-sm leading-relaxed text-paper/65">Gestão de plantões, indisponibilidades e meritocracia em um único fluxo operacional.</p>
+          <p className="ui-font mt-5 max-w-sm text-sm leading-relaxed text-paper/65">Gestão de plantões, indisponibilidades e equilíbrio em um único fluxo operacional.</p>
         </div>
         <div className="p-6 sm:p-9">
         <p className="eyebrow">Acesso seguro</p>

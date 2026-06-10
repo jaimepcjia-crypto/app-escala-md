@@ -15,4 +15,12 @@ describe("app assistant knowledge", () => {
     expect(prompt).toContain("não execute");
     expect(prompt).toContain("Não exponha senhas");
   });
+
+  it("não expõe ranking, vendas ou meritocracia no conhecimento público", () => {
+    const knowledge = APP_KNOWLEDGE.join(" ").toLocaleLowerCase("pt-BR");
+    expect(knowledge).not.toContain("ranking");
+    expect(knowledge).not.toContain("vendas");
+    expect(knowledge).not.toContain("meritocracia");
+    expect(knowledge).toContain("classificação interna nunca deve ser exposta");
+  });
 });

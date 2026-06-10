@@ -12,5 +12,6 @@ prisma/dev.db
 prisma/dev.db-journal
 prisma/*.backup.db
 playwright-*.png
+backups/
 
 .vercel

@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   const password = String(body.password ?? "");
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { broker: { include: { team: true } } }
+    include: { broker: { select: { id: true, name: true, team: { select: { name: true, isFerreira: true } } } } }
   });
 
   const verification = user ? verifyStoredPassword(password, user) : null;

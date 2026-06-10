@@ -68,11 +68,11 @@ export function AppShell({ children, active }: { children: React.ReactNode; acti
   const managerLinks = [
     { href: "/admin", label: "PUBLICAR ESCALA", key: "admin", icon: Shield, help: "Painel do gerente: importar, gerar e publicar a escala, e gerir corretores." },
     { href: "/disponibilidade", label: "INDISPONIBILIDADES", key: "disponibilidade", icon: ClipboardList, help: "Abre a visualizacao mensal de indisponibilidades dos corretores." },
-    { href: "/escala", label: "ESCALA/RANKING", key: "escala", icon: BarChart3, help: "Mostra o ranking de vendas e a escala publicada da semana." }
+    { href: "/escala", label: "ESCALA", key: "escala", icon: BarChart3, help: "Mostra a escala publicada da semana." }
   ] as const;
   const brokerLinks = [
     { href: "/disponibilidade", label: "INDISPONIBILIDADES", key: "disponibilidade", icon: ClipboardList, help: "Abre o calendario mensal para marcar os dias e turnos em que nao pode trabalhar." },
-    { href: "/escala", label: "ESCALA/RANKING", key: "escala", icon: BarChart3, help: "Mostra o ranking de vendas e a escala publicada da semana." }
+    { href: "/escala", label: "ESCALA", key: "escala", icon: BarChart3, help: "Mostra a escala publicada da semana." }
   ] as const;
   const links = useMemo(() => {
     if (role === "BROKER") return brokerLinks;

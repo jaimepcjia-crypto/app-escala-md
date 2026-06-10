@@ -4,8 +4,9 @@ import { normalizeWeekStart } from "@/lib/constants";
 import { generateSchedule } from "@/lib/scheduler";
 import { latestConfirmedImport } from "@/lib/import-workflow";
 import { generationWindowStatus } from "@/lib/deadlines";
-import { buildBrokerStatsWithRanks, reviewScheduleWithLlm } from "@/lib/llm";
+import { buildBrokerStats, reviewScheduleWithLlm } from "@/lib/llm";
 import { invalidatePendingChangeRequests } from "@/lib/ai-schedule-changes";
+import { missingEffortBrokerNames } from "@/lib/effort-level";
 
 export async function generateAndPublishSchedule(
   weekStartInput: string | Date,
@@ -23,6 +24,13 @@ export async function generateAndPublishSchedule(
   }
 
   const planningData = await listPlanningData(weekStart);
+  const missingEffort = missingEffortBrokerNames(planningData.brokers);
+  if (missingEffort.length) {
+    throw Object.assign(
+      new Error(`Classifique o nivel de esforco de todos os corretores ativos antes de gerar a escala: ${missingEffort.join(", ")}.`),
+      { status: 409 }
+    );
+  }
   await invalidatePendingChangeRequests(weekStart);
   const focusBroker = options.focusBrokerName
     ? planningData.brokers.find((broker) => broker.name.toLowerCase() === options.focusBrokerName!.trim().toLowerCase())
@@ -120,10 +128,7 @@ export async function generateAndPublishSchedule(
     weekStart,
     assignments: schedule.assignments,
     conflicts: result.conflicts,
-    brokerStats: buildBrokerStatsWithRanks(
-      schedule.assignments,
-      new Map(planningData.brokers.map((broker) => [broker.id, broker.salesRank]))
-    )
+    brokerStats: buildBrokerStats(schedule.assignments)
   });
   const savedReview = await prisma.aiScheduleReview.create({
     data: {
@@ -131,7 +136,6 @@ export async function generateAndPublishSchedule(
       model: aiReview.model,
       status: aiReview.status,
       summary: aiReview.summary,
-      meritocracy: aiReview.meritocracy,
       balance: aiReview.balance,
       conflicts: aiReview.conflicts,
       rawJson: aiReview.rawJson,

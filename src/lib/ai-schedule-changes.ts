@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { dateForWeekDay } from "@/lib/deadlines";
 import { DAYS } from "@/lib/constants";
-import { getAdminSnapshot } from "@/lib/data";
+import { effortLevelLabel, isEffortLevel } from "@/lib/effort-level";
 
 export type RequestedScheduleChange = {
   localName: string | null;
@@ -23,6 +23,7 @@ type ResolvedChange = {
   startHour: number;
   timeLabel: string | null;
   warnings: string[];
+  privateWarnings: string[];
 };
 
 export function hardConstraintReasons(input: {
@@ -53,8 +54,6 @@ function normalize(value?: string | null) {
 function assignmentLocalName(item: { importedCell?: { localName?: string | null } | null; dutyType: { name: string } }) {
   return item.importedCell?.localName || item.dutyType.name;
 }
-
-const dayOrder: string[] = DAYS.map((item) => item.key);
 
 function assignmentStartHour(item: { startHour?: number | null; importedCell?: { startHour?: number | null } | null; shift: string }) {
   if (item.startHour !== null && item.startHour !== undefined) return item.startHour;
@@ -152,7 +151,8 @@ export async function analyzeScheduleChangeRequest(weekStart: Date, command: str
       dayOfWeek: assignment.dayOfWeek,
       startHour: assignmentStartHour(assignment),
       timeLabel: assignment.importedCell?.timeLabel ?? null,
-      warnings: []
+      warnings: [],
+      privateWarnings: []
     });
   }
 
@@ -180,31 +180,38 @@ export async function analyzeScheduleChangeRequest(weekStart: Date, command: str
         weekStart,
         command,
         proposedJson: JSON.stringify(validation.changes),
-        analysisJson: JSON.stringify({ warnings: validation.changes.flatMap((item) => item.warnings) }),
+        analysisJson: JSON.stringify({
+          warnings: validation.changes.flatMap((item) => item.warnings),
+          privateWarnings: validation.changes.flatMap((item) => item.privateWarnings)
+        }),
         summary: validation.changes.map(formatChange).join("\n")
       }
     });
   });
   const warningLines = validation.changes.flatMap((item) => item.warnings.map((warning) => `${formatChange(item)} - ${warning}`));
+  const privateWarningLines = validation.changes.flatMap((item) => item.privateWarnings.map((warning) => `${formatChange(item)} - ${warning}`));
   return {
     state: "CONFIRMATION_REQUIRED" as const,
     requestId: request.id,
-    message: `IA: analise concluida. Nenhuma mudanca foi aplicada ainda.\n${validation.changes.map((item) => `- ${formatChange(item)}`).join("\n")}${warningLines.length ? `\n\nRessalvas aos criterios de distribuicao:\n- ${warningLines.join("\n- ")}` : "\n\nO pedido nao contraria os criterios flexiveis atuais."}\n\nConfirme ou cancele o pedido.`
+    message: `IA: analise concluida. Nenhuma mudanca foi aplicada ainda.\n${validation.changes.map((item) => `- ${formatChange(item)}`).join("\n")}${warningLines.length ? `\n\nRessalvas aos criterios de distribuicao:\n- ${warningLines.join("\n- ")}` : "\n\nO pedido nao contraria os criterios flexiveis publicos atuais."}${privateWarningLines.length ? `\n\nAnalise privada do nivel de esforco:\n- ${privateWarningLines.join("\n- ")}` : ""}\n\nConfirme ou cancele o pedido.`
   };
 }
 
 async function validateResolvedChanges(
   schedule: Awaited<ReturnType<typeof publishedSchedule>> & {},
-  brokers: Array<{ id: string; name: string; active: boolean; canExternalDuty: boolean }>,
+  brokers: Array<{ id: string; name: string; active: boolean; canExternalDuty: boolean; effortLevel?: string | null }>,
   inputChanges: ResolvedChange[]
 ) {
-  const changes = inputChanges.map((item) => ({ ...item, warnings: [] as string[] }));
+  const changes = inputChanges.map((item) => ({ ...item, warnings: [] as string[], privateWarnings: [] as string[] }));
   const changeByAssignment = new Map(changes.map((change) => [change.assignmentId, change]));
   const hardBlocks: string[] = [];
   let hasUnavailability = false;
-  const unavailabilities = await prisma.unavailability.findMany({
-    where: { date: { gte: schedule.weekStart, lte: new Date(schedule.weekStart.getTime() + 6 * 86400000) } }
-  });
+  const [unavailabilities, priorities] = await Promise.all([
+    prisma.unavailability.findMany({
+      where: { date: { gte: schedule.weekStart, lte: new Date(schedule.weekStart.getTime() + 6 * 86400000) } }
+    }),
+    prisma.dutyPriority.findMany({ orderBy: { position: "asc" } })
+  ]);
   const brokerById = new Map(brokers.map((broker) => [broker.id, broker]));
   const finalRows = schedule.assignments
     .filter((item) => item.assignmentType !== "EXTERNAL_IMPORTED")
@@ -246,8 +253,6 @@ async function validateResolvedChanges(
   for (const row of finalRows) if (row.brokerId) counts.set(row.brokerId, (counts.get(row.brokerId) ?? 0) + 1);
   const activeIds = brokers.filter((broker) => broker.active).map((broker) => broker.id);
   const average = activeIds.length ? finalRows.filter((row) => row.brokerId).length / activeIds.length : 0;
-  const snapshot = await getAdminSnapshot(schedule.weekStart.toISOString());
-  const activeFerreiraSales = new Set(snapshot.brokers.filter((item) => item.team.isFerreira && item.active).map((item) => item.salesAmountCents));
   for (const change of changes) {
     if (!change.newBrokerId) continue;
     const broker = brokerById.get(change.newBrokerId)!;
@@ -257,20 +262,36 @@ async function validateResolvedChanges(
     if (sameLocal > 1) change.warnings.push(`Concentracao por tipo: ${broker.name} ficara com ${sameLocal} plantoes em ${change.localName}.`);
     const sameDay = finalRows.filter((row) => row.brokerId === change.newBrokerId && row.assignment.dayOfWeek === change.dayOfWeek).length;
     if (sameDay > 1) change.warnings.push(`Distribuicao semanal contrariada: ${broker.name} ficara com ${sameDay} plantoes no mesmo dia.`);
-    const priorityIndex = snapshot.plantaoPriorities.findIndex((item) => item.localName === change.localName);
-    const brokerSnapshot = snapshot.brokers.find((item) => item.id === change.newBrokerId);
-    if (activeFerreiraSales.size > 1 && priorityIndex >= 0 && priorityIndex < 3 && brokerSnapshot?.salesOrdinalStart) {
-      const sameLocalRows = schedule.assignments.filter((item) => item.assignmentType !== "EXTERNAL_IMPORTED" && assignmentLocalName(item) === change.localName);
-      const reservedCount = Math.ceil(sameLocalRows.length * 0.4);
-      const ordered = [...sameLocalRows].sort((a, b) => dayOrder.indexOf(a.dayOfWeek) - dayOrder.indexOf(b.dayOfWeek) || assignmentStartHour(a) - assignmentStartHour(b) || a.slot - b.slot);
-      const index = ordered.findIndex((item) => item.id === change.assignmentId);
-      const expectedStart = priorityIndex * 2 + 1;
-      const expectedEnd = expectedStart + 1;
-      if (index >= 0 && index < reservedCount && (
-        (brokerSnapshot.salesOrdinalEnd ?? brokerSnapshot.salesOrdinalStart) < expectedStart ||
-        brokerSnapshot.salesOrdinalStart > expectedEnd
-      )) {
-        change.warnings.push(`Meritocracia contrariada: esta vaga reservada prioriza a faixa ${expectedStart}o a ${expectedEnd}o.`);
+  }
+
+  const orderedLocals = [...new Set(finalRows.map((row) => assignmentLocalName(row.assignment)))].sort((left, right) => {
+    const leftPosition = priorities.find((item) => item.localName === left)?.position ?? 999;
+    const rightPosition = priorities.find((item) => item.localName === right)?.position ?? 999;
+    return leftPosition - rightPosition || left.localeCompare(right);
+  });
+  const topLocals = new Set(orderedLocals.slice(0, 2));
+  const bottomLocals = new Set(orderedLocals.slice(-2));
+  for (const change of changes) {
+    if (!change.expectedBrokerId || change.expectedBrokerId === change.newBrokerId) continue;
+    const previousBroker = brokerById.get(change.expectedBrokerId);
+    if (!previousBroker || !isEffortLevel(previousBroker.effortLevel)) continue;
+    const originalRows = schedule.assignments.filter((item) => item.assignmentType !== "EXTERNAL_IMPORTED" && item.brokerId === previousBroker.id);
+    const brokerFinalRows = finalRows.filter((row) => row.brokerId === previousBroker.id);
+    if (previousBroker.effortLevel === "VERY_HIGH" || previousBroker.effortLevel === "HIGH") {
+      const target = previousBroker.effortLevel === "VERY_HIGH" ? 2 : 1;
+      if (topLocals.has(change.localName)) {
+        const originalCount = originalRows.filter((item) => assignmentLocalName(item) === change.localName).length;
+        const finalCount = brokerFinalRows.filter((row) => assignmentLocalName(row.assignment) === change.localName).length;
+        if (finalCount < target && finalCount < originalCount) {
+          change.privateWarnings.push(`${previousBroker.name} (${effortLevelLabel(previousBroker.effortLevel)}) ficara abaixo da meta privada de ${target} vaga(s) em ${change.localName}.`);
+        }
+      }
+    } else if (bottomLocals.has(change.localName)) {
+      const target = previousBroker.effortLevel === "LOW" ? 3 : 2;
+      const originalCount = originalRows.filter((item) => bottomLocals.has(assignmentLocalName(item))).length;
+      const finalCount = brokerFinalRows.filter((row) => bottomLocals.has(assignmentLocalName(row.assignment))).length;
+      if (finalCount < target && finalCount < originalCount) {
+        change.privateWarnings.push(`${previousBroker.name} (${effortLevelLabel(previousBroker.effortLevel)}) ficara abaixo da meta privada de ${target} vaga(s) entre os dois piores plantoes.`);
       }
     }
   }

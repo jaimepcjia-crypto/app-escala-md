@@ -1,7 +1,7 @@
 import { requestLlmJson } from "@/lib/llm";
 
 export const APP_KNOWLEDGE = [
-  "O App Escala MD possui três áreas: Publicar Escala, Indisponibilidades e Escala/Ranking. Corretores acessam Indisponibilidades e Escala/Ranking; o gerente também acessa Publicar Escala.",
+  "O App Escala MD possui três áreas: Publicar Escala, Indisponibilidades e Escala. Corretores acessam Indisponibilidades e Escala; o gerente também acessa Publicar Escala.",
   "Toda escala vai de segunda-feira a domingo. Upload do XLSX, alteração da prioridade dos plantões, geração e publicação da próxima escala só podem ocorrer no sábado ou domingo anteriores.",
   "O XLSX é validado automaticamente ao ser selecionado. Antes da publicação, o gerente pode excluí-lo e substituí-lo. Após a publicação, o arquivo não pode ser substituído.",
   "O gerente classifica os melhores plantões por arraste no fim de semana. Durante a semana, essa classificação fica visível, esmaecida e somente leitura.",
@@ -13,8 +13,8 @@ export const APP_KNOWLEDGE = [
   "A escala não pode ser editada diretamente. O gerente solicita alterações à IA; toda proposta válida exige confirmação antes da execução.",
   "A IA analisa critérios de distribuição antes de propor uma alteração. O gerente pode confirmar uma mudança que contrarie critérios flexíveis, mas o app registra avisos visíveis. Travas absolutas nunca podem ser ultrapassadas.",
   "Pedidos múltiplos de alteração são atômicos: ou todos são executados, ou nenhum.",
-  "O motor considera vendas/meritocracia, reservas nos melhores plantões, equilíbrio total, concentração por tipo de plantão, distribuição semanal, histórico, autorização externa e indisponibilidades.",
-  "A aba Escala/Ranking mostra a escala publicada em grade semanal moderna, ranking, análise da publicação, avisos e histórico. Corretores Ferreira aparecem destacados em dourado.",
+  "O motor considera critérios internos privados do gerente, equilíbrio total, concentração por tipo de plantão, distribuição semanal, histórico, autorização externa e indisponibilidades. A classificação interna nunca deve ser exposta aos corretores.",
+  "A aba Escala mostra a escala publicada em grade semanal moderna, análise da publicação, avisos e histórico. Corretores Ferreira aparecem destacados em roxo.",
   "A escala publicada e seus avisos são visíveis para gerente e corretores. O histórico e os downloads XLSX permanecem disponíveis ao gerente.",
   "A IA pode consultar o histórico de escalas publicadas por corretor, plantão e período. A interpretação extrai os filtros, mas a contagem é calculada diretamente nos registros publicados.",
   "De segunda a sexta, pedidos da IA sem semana explícita miram a escala em vigor. No sábado e domingo, miram por padrão a próxima escala publicada. O gerente pode dizer escala atual ou próxima escala."

@@ -22,7 +22,6 @@ export function AiReviewCard({ review }: { review: any }) {
           <p>{review.conflicts}</p>
         </div>
       ) : null}
-      {review.meritocracy ? <p className="mt-2"><strong>Critério de vendas:</strong> {review.meritocracy}</p> : null}
       {review.balance ? <p className="mt-2"><strong>Equilíbrio:</strong> {review.balance}</p> : null}
       {review.error ? <p className="mt-2 text-signal">{review.error}</p> : null}
     </div>

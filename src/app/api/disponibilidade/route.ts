@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
         total: nextWeekReadiness.total
       }
     },
-    brokers,
+    brokers: brokers.map(({ effortLevel: _effortLevel, ...broker }) => broker),
     days: days.map((date) => {
       const rangeStatus = unavailableDateStatus(date);
       const published = publishedSet.has(weekKey(date));

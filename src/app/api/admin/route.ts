@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSnapshot, reaisToCents, salesMonthStartForWeek } from "@/lib/data";
+import { getAdminSnapshot } from "@/lib/data";
 import { weeklyWorkflowStatus } from "@/lib/deadlines";
 import { isValidEmail, isValidNumericPassword, normalizeEmail, numericPasswordError, passwordCredentialData, requireManager, verifyPassword } from "@/lib/auth";
 import { brokerIdentityChanged } from "@/lib/availability-readiness";
+import { isEffortLevel } from "@/lib/effort-level";
 
 export async function GET(request: NextRequest) {
   const auth = await requireManager(request);
@@ -72,7 +73,6 @@ export async function POST(request: NextRequest) {
       });
       await tx.unavailabilityConfirmation.deleteMany({ where: { brokerId } });
       await tx.unavailability.deleteMany({ where: { brokerId } });
-      await tx.brokerMonthlySale.deleteMany({ where: { brokerId } });
       await tx.historyTotal.deleteMany({ where: { brokerId } });
       await tx.user.deleteMany({ where: { brokerId } });
       await tx.broker.delete({ where: { id: brokerId } });
@@ -81,15 +81,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, broker });
   }
 
-  if (body.action === "updateMonthlySale") {
-    const weekStart = weeklyWorkflowStatus().weekStartDate;
-    const monthStart = salesMonthStartForWeek(weekStart);
-    const sale = await prisma.brokerMonthlySale.upsert({
-      where: { monthStart_brokerId: { monthStart, brokerId: String(body.brokerId) } },
-      update: { amountCents: reaisToCents(body.amountReais) },
-      create: { monthStart, brokerId: String(body.brokerId), amountCents: reaisToCents(body.amountReais) }
-    });
-    return NextResponse.json({ sale: { ...sale, amountCents: sale.amountCents.toString() } });
+  if (body.action === "updateEffortLevel") {
+    const brokerId = String(body.brokerId ?? "");
+    const effortLevel = String(body.effortLevel ?? "");
+    if (!isEffortLevel(effortLevel)) {
+      return NextResponse.json({ error: "Selecione um nivel de esforco valido." }, { status: 400 });
+    }
+    const broker = await prisma.broker.update({ where: { id: brokerId }, data: { effortLevel } });
+    return NextResponse.json({ broker });
   }
 
   if (body.action === "changeOwnPassword") {
