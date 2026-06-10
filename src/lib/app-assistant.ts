@@ -1,5 +1,4 @@
-import { requestLlmJson } from "@/lib/llm";
-
+// Base de regras permanentes do app, reutilizada pelo system prompt da IA central (ver ai-agent.ts).
 export const APP_KNOWLEDGE = [
   "O App Escala MD possui três áreas: Publicar Escala, Indisponibilidades e Escala. Corretores acessam Indisponibilidades e Escala; o gerente também acessa Publicar Escala.",
   "Toda escala vai de segunda-feira a domingo. Upload do XLSX, geração e publicação da próxima escala só podem ocorrer no sábado ou domingo anteriores.",
@@ -13,72 +12,10 @@ export const APP_KNOWLEDGE = [
   "A escala não pode ser editada diretamente. O gerente solicita alterações à IA; toda proposta válida exige confirmação antes da execução.",
   "A IA analisa critérios de distribuição antes de propor uma alteração. O gerente pode confirmar uma mudança que contrarie critérios flexíveis, mas o app registra avisos visíveis. Travas absolutas nunca podem ser ultrapassadas.",
   "Pedidos múltiplos de alteração são atômicos: ou todos são executados, ou nenhum.",
-  "O motor considera critérios internos privados do gerente, equilíbrio total, concentração por tipo de plantão, distribuição semanal, histórico, autorização externa e indisponibilidades. A classificação interna nunca deve ser exposta aos corretores.",
+  "O motor considera o nível de esforço de cada corretor — classificação interna do gerente — além de equilíbrio total, concentração por tipo de plantão, distribuição semanal, histórico, autorização externa e indisponibilidades. Esta IA atende apenas o gerente, então pode explicar abertamente o nível de esforço e o equilíbrio; os corretores não acessam esta IA nem esses dados.",
   "A aba Escala mostra a escala publicada em grade semanal moderna, análise da publicação, avisos e histórico. Corretores Ferreira aparecem destacados em roxo.",
   "A escala publicada e seus avisos são visíveis para gerente e corretores. O histórico e os downloads XLSX permanecem disponíveis ao gerente.",
   "A IA pode consultar o histórico de escalas publicadas por corretor, plantão e período. A interpretação extrai os filtros, mas a contagem é calculada diretamente nos registros publicados.",
   "De segunda a sexta, pedidos da IA sem semana explícita miram a escala em vigor. No sábado e domingo, miram por padrão a próxima escala publicada. O gerente pode dizer escala atual ou próxima escala.",
   "Ao redistribuir a escala em vigor, a IA preserva todos os plantões até o fim do dia atual, conta o que já foi trabalhado na semana e reorganiza somente os dias seguintes."
 ];
-
-export type AppAssistantContext = {
-  workflow: {
-    isOpen: boolean;
-    currentWeekStart: string;
-    currentWeekEnd: string;
-    nextWeekStart: string;
-    nextWeekEnd: string;
-    opensOn: string;
-    daysUntilOpen: number;
-  };
-  brokers: {
-    activeFerreira: number;
-    inactiveFerreira: number;
-    authorizedForExternal: number;
-  };
-  nextWeek: {
-    availabilityConfirmed: number;
-    availabilityTotal: number;
-    importStatus: string;
-    importFileName: string | null;
-    published: boolean;
-  };
-  currentWeek: {
-    published: boolean;
-    totalAssignments: number;
-    ferreiraAssignments: number;
-    externalImportedAssignments: number;
-    uncoveredAssignments: number;
-    alerts: number;
-  };
-  priorities: string[];
-};
-
-export function appAssistantSystemPrompt() {
-  return [
-    "Você é a assistente especialista do App Escala MD.",
-    "Responda dúvidas sobre funcionamento, regras, telas, permissões, dados e estado atual do app em português do Brasil.",
-    "Esta etapa é somente informativa: não execute, prometa executar nem simule alterações no motor.",
-    "Use apenas as regras e o estado atual fornecidos. Não invente dados.",
-    "Diferencie claramente regra permanente de estado atual quando isso ajudar.",
-    "Não exponha senhas, emails, IDs internos, detalhes de banco, código ou configuração.",
-    "Se a dúvida pedir uma ação, explique como solicitá-la à IA operacional.",
-    "Se não houver informação suficiente, diga exatamente o que não é possível determinar.",
-    "Responda de forma objetiva, mas completa.",
-    "Retorne somente um objeto json válido com a chave answer.",
-    `REGRAS DO APP:\n- ${APP_KNOWLEDGE.join("\n- ")}`
-  ].join("\n");
-}
-
-export async function answerAppQuestion(command: string, context: AppAssistantContext) {
-  const result = await requestLlmJson<{ answer: string }>({
-    system: appAssistantSystemPrompt(),
-    user: JSON.stringify({ pergunta: command, estadoAtual: context }),
-    schema: {
-      type: "OBJECT",
-      properties: { answer: { type: "STRING" } },
-      required: ["answer"]
-    }
-  });
-  return result.parsed.answer.trim();
-}

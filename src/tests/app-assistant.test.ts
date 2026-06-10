@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_KNOWLEDGE, appAssistantSystemPrompt } from "@/lib/app-assistant";
+import { APP_KNOWLEDGE } from "@/lib/app-assistant";
 
 describe("app assistant knowledge", () => {
   it("explica as travas absolutas e a confirmação da IA", () => {
@@ -9,18 +9,16 @@ describe("app assistant knowledge", () => {
     expect(knowledge).toContain("Pedidos múltiplos de alteração são atômicos");
   });
 
-  it("separa respostas informativas de ações no motor", () => {
-    const prompt = appAssistantSystemPrompt();
-    expect(prompt).toContain("Esta etapa é somente informativa");
-    expect(prompt).toContain("não execute");
-    expect(prompt).toContain("Não exponha senhas");
+  it("para o gerente, o nível de esforço deixa de ser oculto", () => {
+    const knowledge = APP_KNOWLEDGE.join(" ");
+    expect(knowledge).not.toContain("classificação interna nunca deve ser exposta");
+    expect(knowledge.toLocaleLowerCase("pt-BR")).toContain("nível de esforço");
   });
 
-  it("não expõe ranking, vendas ou meritocracia no conhecimento público", () => {
+  it("não introduz ranking, vendas ou meritocracia no conhecimento", () => {
     const knowledge = APP_KNOWLEDGE.join(" ").toLocaleLowerCase("pt-BR");
     expect(knowledge).not.toContain("ranking");
     expect(knowledge).not.toContain("vendas");
     expect(knowledge).not.toContain("meritocracia");
-    expect(knowledge).toContain("classificação interna nunca deve ser exposta");
   });
 });
